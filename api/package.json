@@ -1,0 +1,20 @@
+{
+  "name": "ipfs-social-api",
+  "version": "1.0.0",
+  "description": "IPFS Social API Backend",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.97.0",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "ipfs-http-client": "^60.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

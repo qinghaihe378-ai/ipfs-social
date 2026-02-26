@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import './App.css';
 
-const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-  ? 'http://localhost:3001' 
-  : '';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 function App() {
   const [tweets, setTweets] = useState([]);
@@ -31,6 +29,13 @@ function App() {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [showFileUpload, setShowFileUpload] = useState(false);
+  const [language, setLanguage] = useState(localStorage.getItem('language') || 'zh');
+  const [showLanguageSelect, setShowLanguageSelect] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [messageInput, setMessageInput] = useState('');
+  const recordingInterval = useRef(null);
 
   useEffect(() => {
     checkConnection();
@@ -369,10 +374,65 @@ function App() {
     }
   };
 
+  // 表情包数据
+  const emojis = [
+    '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
+    '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰',
+    '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜',
+    '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏',
+    '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
+    '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠',
+    '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨',
+    '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥'
+  ];
+
+  // 处理表情包点击
+  const handleEmojiClick = (emoji) => {
+    if (selectedChat) {
+      sendMessage(emoji, selectedChat);
+      setShowEmojiPicker(false);
+    }
+  };
+
+  // 开始录音
+  const startRecording = () => {
+    setIsRecording(true);
+    setRecordingTime(0);
+    recordingInterval.current = setInterval(() => {
+      setRecordingTime(prev => prev + 1);
+    }, 1000);
+  };
+
+  // 停止录音
+  const stopRecording = () => {
+    setIsRecording(false);
+    if (recordingInterval.current) {
+      clearInterval(recordingInterval.current);
+      recordingInterval.current = null;
+    }
+    setRecordingTime(0);
+    // 这里可以添加实际的录音处理逻辑
+  };
+
   const sendMessage = async (content, toUser) => {
-    if (!content.trim()) return;
+    if (!content.trim() || !username || !toUser) return;
 
     try {
+      // 先创建消息对象
+      const newMessage = {
+        id: Date.now().toString(),
+        from: username,
+        to: toUser,
+        content,
+        timestamp: Date.now()
+      };
+
+      // 先在本地显示消息
+      const updatedMessages = [...messages, newMessage];
+      setMessages(updatedMessages);
+      localStorage.setItem('messages', JSON.stringify(updatedMessages));
+
+      // 尝试发送到服务器
       const response = await fetch(`${API_BASE}/api/send-message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -386,14 +446,12 @@ function App() {
 
       const data = await response.json();
       
-      if (data.success) {
-        const updatedMessages = [...messages, data.message];
-        setMessages(updatedMessages);
-        localStorage.setItem('messages', JSON.stringify(updatedMessages));
+      if (!data.success) {
+        console.error('发送消息失败:', data);
       }
     } catch (error) {
       console.error('发送消息失败:', error);
-      alert('发送消息失败');
+      // 不显示错误提示，因为消息已经在本地显示了
     }
   };
 
@@ -688,37 +746,156 @@ function App() {
         <div className="feed">
           {activeTab === 'home' && (
             <div className="wechat-content">
-              <div className="wechat-header">
-                <div className="wechat-title">Mutual</div>
-                <button className="wechat-add-btn" onClick={() => setShowAddFriend(true)}>
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                  </svg>
-                </button>
-              </div>
-              <div className="messages-list">
-                {friends.length === 0 ? (
-                  <div className="empty-state">
-                    <p>暂无好友，点击右上角添加</p>
+              {!selectedChat ? (
+                <>
+                  <div className="wechat-header">
+                    <div className="wechat-title">Mutual</div>
+                    <button className="wechat-add-btn" onClick={() => setShowAddFriend(true)}>
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                      </svg>
+                    </button>
                   </div>
-                ) : (
-                  friends.map(friend => (
-                    <div key={friend.username} className="message-item" onClick={() => { setSelectedChat(friend.username); setActiveTab('messages'); }}>
-                      <div className="message-avatar">
-                        {friend.username.charAt(0).toUpperCase()}
+                  <div className="messages-list">
+                    {friends.length === 0 ? (
+                      <div className="empty-state">
+                        <p>暂无好友，点击右上角添加</p>
                       </div>
-                      <div className="message-info">
-                        <div className="message-name">{friend.username}</div>
-                        <div className="message-preview">
-                          {getChatMessages(friend.username).length > 0
-                            ? getChatMessages(friend.username)[getChatMessages(friend.username).length - 1].content
-                            : '暂无消息'}
+                    ) : (
+                      friends.map(friend => (
+                        <div key={friend.username} className="message-item" onClick={() => setSelectedChat(friend.username)}>
+                          <div className="message-avatar">
+                            {friend.username.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="message-info">
+                            <div className="message-name">{friend.username}</div>
+                            <div className="message-preview">
+                              {getChatMessages(friend.username).length > 0
+                                ? getChatMessages(friend.username)[getChatMessages(friend.username).length - 1].content
+                                : '暂无消息'}
+                            </div>
+                          </div>
                         </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="chat-view mobile-chat">
+                  <div className="chat-header">
+                    <button className="chat-back-btn" onClick={() => setSelectedChat(null)}>
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                      </svg>
+                    </button>
+                    <div className="chat-user">
+                      <span className="chat-username">{selectedChat}</span>
+                    </div>
+                    <button className="chat-more-btn">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  <div className="chat-messages">
+                    {getChatMessages(selectedChat).map(msg => (
+                      <div key={msg.id} className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}>
+                        {msg.from !== username && (
+                          <div className="message-avatar">
+                            {msg.from.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="message-wrapper">
+                          <div className="message-content">
+                            {msg.content}
+                          </div>
+                          <div className="message-time">
+                            {formatDate(msg.timestamp)}
+                          </div>
+                        </div>
+                        {msg.from === username && (
+                          <div className="message-avatar">
+                            {msg.from.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="chat-input">
+                    <button 
+                      className="chat-input-btn" 
+                      onMouseDown={startRecording} 
+                      onMouseUp={stopRecording} 
+                      onMouseLeave={stopRecording}
+                    >
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c.55 0 1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6c0-.55.45-1 1-1zm0 10c-1.1 0-2 .9-2 2h8c0-1.1-.9-2-2-2h-4z"/>
+                      </svg>
+                      {isRecording && (
+                        <div className="recording-indicator">
+                          <div className="recording-dot"></div>
+                          <span>{recordingTime}s</span>
+                        </div>
+                      )}
+                    </button>
+                    <input
+                      type="text"
+                      placeholder="发送消息"
+                      value={messageInput}
+                      onChange={(e) => setMessageInput(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && messageInput.trim()) {
+                          sendMessage(messageInput, selectedChat);
+                          setMessageInput('');
+                        }
+                      }}
+                    />
+                    <button className="chat-input-btn" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+                      </svg>
+                    </button>
+                    {messageInput.trim() ? (
+                      <button 
+                        className="chat-send-btn" 
+                        onClick={() => {
+                          if (messageInput.trim()) {
+                            sendMessage(messageInput, selectedChat);
+                            setMessageInput('');
+                          }
+                        }}
+                      >
+                        发送
+                      </button>
+                    ) : (
+                      <button className="chat-input-btn">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* 表情包选择器 */}
+                  {showEmojiPicker && (
+                    <div className="emoji-picker">
+                      <div className="emoji-grid">
+                        {emojis.map((emoji, index) => (
+                          <button 
+                            key={index} 
+                            className="emoji-item" 
+                            onClick={() => handleEmojiClick(emoji)}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -817,6 +994,11 @@ function App() {
             <div className="explore-content">
               <div className="explore-header">
                 <div className="explore-title">发现</div>
+                <button className="explore-compose-btn" onClick={() => setShowCompose(true)}>
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14h-2v-4h-2v4H8v-7h2v1.5h.25c.41-.75 1.16-1.5 2.25-1.5s1.84.75 2.25 1.5H16v-1.5h2v7z"/>
+                  </svg>
+                </button>
               </div>
               <div className="moments-list">
                 {tweets.length === 0 ? (
@@ -851,59 +1033,68 @@ function App() {
           )}
 
           {activeTab === 'messages' && (
-            <div className="messages-content desktop-messages">
-              <div className="messages-header">
-                <div className="messages-title">消息</div>
-                <button className="wechat-add-btn" onClick={() => setShowAddFriend(true)}>
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="desktop-chat-container">
-                <div className="messages-list desktop-list">
-                  {friends.length === 0 ? (
-                    <div className="empty-state">
-                      <p>暂无好友，点击右上角添加好友</p>
-                    </div>
-                  ) : (
-                    friends.map(friend => (
-                      <div 
-                        key={friend.username} 
-                        className={`message-item ${selectedChat === friend.username ? 'active' : ''}`} 
-                        onClick={() => setSelectedChat(friend.username)}
-                      >
-                        <div className="message-avatar">
-                          {friend.username.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="message-info">
-                          <div className="message-name">{friend.username}</div>
-                          <div className="message-preview">
-                            {getChatMessages(friend.username).length > 0
-                              ? getChatMessages(friend.username)[getChatMessages(friend.username).length - 1].content
-                              : '暂无消息'}
+            <div className="wechat-content">
+              {!selectedChat ? (
+                <>
+                  <div className="wechat-header">
+                    <div className="wechat-title">消息</div>
+                    <button className="wechat-add-btn" onClick={() => setShowAddFriend(true)}>
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="messages-list">
+                    {friends.length === 0 ? (
+                      <div className="empty-state">
+                        <p>暂无好友，点击右上角添加好友</p>
+                      </div>
+                    ) : (
+                      friends.map(friend => (
+                        <div key={friend.username} className="message-item" onClick={() => setSelectedChat(friend.username)}>
+                          <div className="message-avatar">
+                            {friend.username.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="message-info">
+                            <div className="message-name">{friend.username}</div>
+                            <div className="message-preview">
+                              {getChatMessages(friend.username).length > 0
+                                ? getChatMessages(friend.username)[getChatMessages(friend.username).length - 1].content
+                                : '暂无消息'}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {selectedChat && (
-                  <div className="chat-view desktop-chat">
-                    <div className="chat-header">
-                      <div className="chat-user">
-                        <div className="chat-avatar">
-                          {selectedChat.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="chat-username">{selectedChat}</span>
-                      </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="chat-view mobile-chat">
+                  <div className="chat-header">
+                    <button className="chat-back-btn" onClick={() => setSelectedChat(null)}>
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                      </svg>
+                    </button>
+                    <div className="chat-user">
+                      <span className="chat-username">{selectedChat}</span>
                     </div>
-                    
-                    <div className="chat-messages">
-                      {getChatMessages(selectedChat).map(msg => (
-                        <div key={msg.id} className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}>
+                    <button className="chat-more-btn">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  <div className="chat-messages">
+                    {getChatMessages(selectedChat).map(msg => (
+                      <div key={msg.id} className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}>
+                        {msg.from !== username && (
+                          <div className="message-avatar">
+                            {msg.from.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="message-wrapper">
                           <div className="message-content">
                             {msg.content}
                           </div>
@@ -911,35 +1102,88 @@ function App() {
                             {formatDate(msg.timestamp)}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                    
-                    <div className="chat-input">
-                      <input
-                        type="text"
-                        placeholder="发送消息"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && e.target.value.trim()) {
-                            sendMessage(e.target.value, selectedChat);
-                            e.target.value = '';
+                        {msg.from === username && (
+                          <div className="message-avatar">
+                            {msg.from.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="chat-input">
+                    <button 
+                      className="chat-input-btn" 
+                      onMouseDown={startRecording} 
+                      onMouseUp={stopRecording} 
+                      onMouseLeave={stopRecording}
+                    >
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c.55 0 1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6c0-.55.45-1 1-1zm0 10c-1.1 0-2 .9-2 2h8c0-1.1-.9-2-2-2h-4z"/>
+                      </svg>
+                      {isRecording && (
+                        <div className="recording-indicator">
+                          <div className="recording-dot"></div>
+                          <span>{recordingTime}s</span>
+                        </div>
+                      )}
+                    </button>
+                    <input
+                      type="text"
+                      placeholder="发送消息"
+                      value={messageInput}
+                      onChange={(e) => setMessageInput(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && messageInput.trim()) {
+                          sendMessage(messageInput, selectedChat);
+                          setMessageInput('');
+                        }
+                      }}
+                    />
+                    <button className="chat-input-btn" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+                      </svg>
+                    </button>
+                    {messageInput.trim() ? (
+                      <button 
+                        className="chat-send-btn" 
+                        onClick={() => {
+                          if (messageInput.trim()) {
+                            sendMessage(messageInput, selectedChat);
+                            setMessageInput('');
                           }
                         }}
-                      />
-                      <button onClick={(e) => {
-                        const input = e.target.previousElementSibling;
-                        if (input.value.trim()) {
-                          sendMessage(input.value, selectedChat);
-                          input.value = '';
-                        }
-                      }}>
+                      >
+                        发送
+                      </button>
+                    ) : (
+                      <button className="chat-input-btn">
                         <svg viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                         </svg>
                       </button>
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
+                  
+                  {/* 表情包选择器 */}
+                  {showEmojiPicker && (
+                    <div className="emoji-picker">
+                      <div className="emoji-grid">
+                        {emojis.map((emoji, index) => (
+                          <button 
+                            key={index} 
+                            className="emoji-item" 
+                            onClick={() => handleEmojiClick(emoji)}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -951,6 +1195,8 @@ function App() {
               </div>
             </div>
           )}
+
+
 
           {activeTab === 'profile' && (
             <div className="profile-content">
@@ -1120,34 +1366,62 @@ function App() {
         </button>
       </nav>
 
-      {/* 移动端发布弹窗 */}
+      {/* 移动端发布页面 */}
       {showCompose && (
-        <div className="compose-modal" onClick={() => setShowCompose(false)}>
-          <div className="compose-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="compose-modal-header">
-              <button onClick={() => setShowCompose(false)} className="close-btn">✕</button>
-              <button 
-                onClick={postTweet} 
-                disabled={loading || !content.trim()}
-                className="post-btn"
-              >
-                发布
-              </button>
-            </div>
-            <div className="compose-modal-body">
-              <div className="avatar">
-                {username ? username.charAt(0).toUpperCase() : '?'}
+        <div className="compose-page">
+          <div className="compose-page-header">
+            <button onClick={() => setShowCompose(false)} className="back-btn">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+              </svg>
+            </button>
+            <div className="compose-page-title">发表文字</div>
+            <button 
+              onClick={postTweet} 
+              disabled={loading || !content.trim()}
+              className="post-btn"
+            >
+              发表
+            </button>
+          </div>
+          <div className="compose-page-content">
+            <textarea
+              className="compose-textarea"
+              placeholder="这一刻的想法..."
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              maxLength={500}
+              autoFocus
+            />
+            <div className="compose-options">
+              <div className="compose-option">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+                <span>所在位置</span>
+                <svg className="option-arrow" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+                </svg>
               </div>
-              <textarea
-                placeholder="有什么新鲜事？"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                maxLength={280}
-                autoFocus
-              />
-            </div>
-            <div className="compose-modal-footer">
-              <span className="char-count">{content.length}/280</span>
+              <div className="compose-option">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                </svg>
+                <span>提醒谁看</span>
+                <svg className="option-arrow" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+                </svg>
+              </div>
+              <div className="compose-option">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+                <span>谁可以看</span>
+                <div className="option-value">公开</div>
+                <svg className="option-arrow" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+                </svg>
+              </div>
             </div>
           </div>
         </div>
@@ -1271,6 +1545,17 @@ function App() {
                   </svg>
                 </div>
               </div>
+              <div className="settings-item" onClick={() => setShowLanguageSelect(true)}>
+                <div className="settings-item-text">语言</div>
+                <div className="settings-item-value">
+                  {language === 'zh' ? '中文' : language === 'en' ? 'English' : language === 'ja' ? '日本語' : language === 'fr' ? 'Français' : language === 'de' ? 'Deutsch' : '中文'}
+                </div>
+                <div className="settings-item-arrow">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
+                  </svg>
+                </div>
+              </div>
             </div>
 
             <div className="settings-section">
@@ -1377,6 +1662,94 @@ function App() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 语言选择页面 */}
+      {showLanguageSelect && (
+        <div className="language-select-page">
+          <div className="language-select-header">
+            <button className="back-btn" onClick={() => setShowLanguageSelect(false)}>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+              </svg>
+            </button>
+            <div className="language-select-title">语言</div>
+            <div className="header-placeholder"></div>
+          </div>
+
+          <div className="language-select-content">
+            <div className="language-item" onClick={() => {
+              setLanguage('zh');
+              localStorage.setItem('language', 'zh');
+              setShowLanguageSelect(false);
+            }}>
+              <div className="language-name">中文</div>
+              {language === 'zh' && (
+                <div className="language-check">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  </svg>
+                </div>
+              )}
+            </div>
+            <div className="language-item" onClick={() => {
+              setLanguage('en');
+              localStorage.setItem('language', 'en');
+              setShowLanguageSelect(false);
+            }}>
+              <div className="language-name">English</div>
+              {language === 'en' && (
+                <div className="language-check">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  </svg>
+                </div>
+              )}
+            </div>
+            <div className="language-item" onClick={() => {
+              setLanguage('ja');
+              localStorage.setItem('language', 'ja');
+              setShowLanguageSelect(false);
+            }}>
+              <div className="language-name">日本語</div>
+              {language === 'ja' && (
+                <div className="language-check">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  </svg>
+                </div>
+              )}
+            </div>
+            <div className="language-item" onClick={() => {
+              setLanguage('fr');
+              localStorage.setItem('language', 'fr');
+              setShowLanguageSelect(false);
+            }}>
+              <div className="language-name">Français</div>
+              {language === 'fr' && (
+                <div className="language-check">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  </svg>
+                </div>
+              )}
+            </div>
+            <div className="language-item" onClick={() => {
+              setLanguage('de');
+              localStorage.setItem('language', 'de');
+              setShowLanguageSelect(false);
+            }}>
+              <div className="language-name">Deutsch</div>
+              {language === 'de' && (
+                <div className="language-check">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  </svg>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

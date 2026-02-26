@@ -5,7 +5,7 @@ import { create } from 'ipfs-http-client';
 import { createClient } from '@supabase/supabase-js';
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -22,7 +22,7 @@ const groups = new Map();
 async function initIPFS() {
   try {
     ipfs = await create({ 
-      url: 'http://localhost:5001/api/v0',
+      url: process.env.IPFS_URL || 'http://localhost:5001/api/v0',
       timeout: 30000
     });
     console.log('IPFS 节点已连接');

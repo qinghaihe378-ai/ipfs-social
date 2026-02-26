@@ -12,6 +12,9 @@
     "vercel-build": "vite build"
   },
   "dependencies": {
+    "@capacitor/android": "^8.1.0",
+    "@capacitor/cli": "^8.1.0",
+    "@capacitor/core": "^8.1.0",
     "@supabase/supabase-js": "^2.97.0",
     "body-parser": "^2.2.2",
     "cors": "^2.8.6",
