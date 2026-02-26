@@ -572,21 +572,56 @@ function App() {
     if (!content.trim()) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/send-group-message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: username,
-          groupId,
-          content,
-          timestamp: Date.now()
-        })
-      });
-
-      const data = await response.json();
+      const timestamp = Date.now();
       
-      if (data.success) {
-        const updatedMessages = [...messages, data.message];
+      try {
+        // 尝试使用 Supabase
+        const { data, error } = await supabase
+          .from('messages')
+          .insert({
+            from_user: username,
+            to_user: groupId,
+            content,
+            type: 'text',
+            read: false,
+            timestamp
+          })
+          .select();
+
+        if (error) {
+          console.warn('Supabase 发送群消息失败，使用本地存储:', error);
+          throw error;
+        } else {
+          const newMessage = {
+            id: data[0].id.toString(),
+            from: username,
+            to: groupId,
+            content,
+            type: 'text',
+            read: false,
+            timestamp,
+            cid: null
+          };
+          
+          const updatedMessages = [...messages, newMessage];
+          setMessages(updatedMessages);
+          localStorage.setItem('messages', JSON.stringify(updatedMessages));
+        }
+      } catch (supabaseError) {
+        // 使用本地存储
+        console.log('使用本地存储发送群消息');
+        const newMessage = {
+          id: Date.now().toString(),
+          from: username,
+          to: groupId,
+          content,
+          type: 'text',
+          read: false,
+          timestamp,
+          cid: null
+        };
+        
+        const updatedMessages = [...messages, newMessage];
         setMessages(updatedMessages);
         localStorage.setItem('messages', JSON.stringify(updatedMessages));
       }
