@@ -16,6 +16,14 @@
       "dest": "/api/server.js"
     },
     {
+      "src": "/assets/(.*)",
+      "dest": "/dist/assets/$1"
+    },
+    {
+      "src": "/vite.svg",
+      "dest": "/dist/vite.svg"
+    },
+    {
       "src": "/(.*)",
       "dest": "/dist/index.html"
     }
