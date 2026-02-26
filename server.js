@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import { create } from 'ipfs-http-client';
+import { createClient } from '@supabase/supabase-js';
 
 const app = express();
 const PORT = 3001;
@@ -9,11 +10,13 @@ const PORT = 3001;
 app.use(cors());
 app.use(bodyParser.json());
 
+const supabaseUrl = 'https://bysvhqhpvkvlejsntgka.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5c3ZocWhwdmt2bGVqc250Z2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNTg3MDgsImV4cCI6MjA4NzYzNDcwOH0.V9mtkwScomV7-2dbbfTDROt0SFXVPGC5HytPM5uktrU';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 let ipfs;
-const registeredUsers = new Set();
 const onlineUsers = new Map();
 const offlineMessages = new Map();
-const groups = new Map();
 
 async function initIPFS() {
   try {
@@ -32,6 +35,7 @@ async function initIPFS() {
   } catch (error) {
     console.error('连接 IPFS 失败:', error.message);
     console.log('提示: 请确保 IPFS 节点正在运行 (ipfs daemon)');
+    console.log('服务器将继续运行，但部分功能可能不可用');
   }
 }
 
@@ -39,15 +43,26 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', ipfsConnected: !!ipfs });
 });
 
-app.post('/api/check-username', (req, res) => {
+app.post('/api/check-username', async (req, res) => {
   const { username } = req.body;
   
   if (!username) {
     return res.status(400).json({ error: '缺少用户名' });
   }
 
-  const exists = registeredUsers.has(username);
-  res.json({ exists, username });
+  try {
+    const { data: existingUser, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', username)
+      .single();
+
+    const exists = !error && existingUser !== null;
+    res.json({ exists, username });
+  } catch (error) {
+    console.error('检查用户名错误:', error);
+    res.json({ exists: false, username });
+  }
 });
 
 app.post('/api/user-online', async (req, res) => {
@@ -63,14 +78,16 @@ app.post('/api/user-online', async (req, res) => {
     online: true
   });
 
-  try {
-    await ipfs.pubsub.publish('user-presence', JSON.stringify({
-      type: 'online',
-      username,
-      timestamp: Date.now()
-    }));
-  } catch (error) {
-    console.warn('广播在线状态失败:', error.message);
+  if (ipfs) {
+    try {
+      await ipfs.pubsub.publish('user-presence', JSON.stringify({
+        type: 'online',
+        username,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.warn('广播在线状态失败:', error.message);
+    }
   }
 
   res.json({ success: true, username });
@@ -102,34 +119,39 @@ app.post('/api/send-message', async (req, res) => {
     }
 
     const message = {
-      id: Date.now().toString(),
-      from,
-      to,
+      from_user: from,
+      to_user: to,
       content,
+      type: 'text',
       timestamp: timestamp || Date.now(),
       read: false
     };
 
+    const { data: savedMessage, error: dbError } = await supabase
+      .from('messages')
+      .insert(message)
+      .select()
+      .single();
+
+    if (dbError) {
+      throw dbError;
+    }
+
     const recipient = onlineUsers.get(to);
     const isOnline = recipient && (Date.now() - recipient.lastSeen) < 60000;
 
-    if (isOnline) {
-      const topic = `chat-${to}`;
-      await ipfs.pubsub.publish(topic, JSON.stringify(message));
-    } else {
-      if (!offlineMessages.has(to)) {
-        offlineMessages.set(to, []);
+    if (ipfs && isOnline) {
+      try {
+        const topic = `chat-${to}`;
+        await ipfs.pubsub.publish(topic, JSON.stringify(savedMessage));
+      } catch (error) {
+        console.warn('发送消息失败:', error.message);
       }
-      offlineMessages.get(to).push(message);
-      
-      const messageJSON = JSON.stringify(message);
-      const { cid } = await ipfs.add(messageJSON);
-      message.cid = cid.toString();
     }
 
     res.json({ 
       success: true, 
-      message,
+      message: savedMessage,
       delivered: isOnline
     });
   } catch (error) {
@@ -147,18 +169,24 @@ app.get('/api/subscribe-messages/:username', async (req, res) => {
 
   const topic = `chat-${username}`;
   
-  try {
-    await ipfs.pubsub.subscribe(topic, (msg) => {
-      const message = JSON.parse(msg.data.toString());
-      res.write(`data: ${JSON.stringify(message)}\n\n`);
-    });
+  if (ipfs) {
+    try {
+      await ipfs.pubsub.subscribe(topic, (msg) => {
+        const message = JSON.parse(msg.data.toString());
+        res.write(`data: ${JSON.stringify(message)}\n\n`);
+      });
 
-    req.on('close', () => {
-      ipfs.pubsub.unsubscribe(topic);
-    });
-  } catch (error) {
-    console.error('订阅消息错误:', error);
-    res.status(500).json({ error: error.message });
+      req.on('close', () => {
+        if (ipfs) {
+          ipfs.pubsub.unsubscribe(topic);
+        }
+      });
+    } catch (error) {
+      console.error('订阅消息错误:', error);
+      res.status(500).json({ error: error.message });
+    }
+  } else {
+    res.status(503).json({ error: 'IPFS 未连接' });
   }
 });
 
@@ -166,8 +194,15 @@ app.get('/api/offline-messages/:username', async (req, res) => {
   const { username } = req.params;
   
   try {
-    const messages = offlineMessages.get(username) || [];
-    offlineMessages.delete(username);
+    const { data: messages, error } = await supabase
+      .from('messages')
+      .select('*')
+      .or(`and(from_user.eq.${username},to_user.eq.${username})`)
+      .order('timestamp', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
     
     res.json({ 
       success: true, 
@@ -217,10 +252,6 @@ app.post('/api/create-group', async (req, res) => {
     };
 
     groups.set(groupId, group);
-
-    const groupJSON = JSON.stringify(group);
-    const { cid } = await ipfs.add(groupJSON);
-    group.cid = cid.toString();
 
     res.json({ 
       success: true, 
@@ -284,10 +315,16 @@ app.post('/api/send-group-message', async (req, res) => {
       type: 'group'
     };
 
-    for (const member of group.members) {
-      if (member !== from) {
-        const topic = `chat-${member}`;
-        await ipfs.pubsub.publish(topic, JSON.stringify(message));
+    if (ipfs) {
+      for (const member of group.members) {
+        if (member !== from) {
+          try {
+            const topic = `chat-${member}`;
+            await ipfs.pubsub.publish(topic, JSON.stringify(message));
+          } catch (error) {
+            console.warn('发送群消息失败:', error.message);
+          }
+        }
       }
     }
 
@@ -322,9 +359,6 @@ app.post('/api/upload-file', async (req, res) => {
       return res.status(400).json({ error: '缺少必要字段' });
     }
 
-    const fileBuffer = Buffer.from(fileData, 'base64');
-    const { cid } = await ipfs.add(fileBuffer);
-
     const message = {
       id: Date.now().toString(),
       from,
@@ -332,17 +366,20 @@ app.post('/api/upload-file', async (req, res) => {
       type: 'file',
       fileName,
       fileType,
-      fileSize: fileBuffer.length,
-      cid: cid.toString(),
+      fileSize: Buffer.from(fileData, 'base64').length,
       timestamp: Date.now()
     };
 
     const recipient = onlineUsers.get(to);
     const isOnline = recipient && (Date.now() - recipient.lastSeen) < 60000;
 
-    if (isOnline) {
-      const topic = `chat-${to}`;
-      await ipfs.pubsub.publish(topic, JSON.stringify(message));
+    if (ipfs && isOnline) {
+      try {
+        const topic = `chat-${to}`;
+        await ipfs.pubsub.publish(topic, JSON.stringify(message));
+      } catch (error) {
+        console.warn('发送文件消息失败:', error.message);
+      }
     } else {
       if (!offlineMessages.has(to)) {
         offlineMessages.set(to, []);
@@ -352,8 +389,7 @@ app.post('/api/upload-file', async (req, res) => {
 
     res.json({ 
       success: true, 
-      message,
-      cid: cid.toString()
+      message
     });
   } catch (error) {
     console.error('上传文件错误:', error);
@@ -364,6 +400,10 @@ app.post('/api/upload-file', async (req, res) => {
 app.get('/api/download-file/:cid', async (req, res) => {
   const { cid } = req.params;
   
+  if (!ipfs) {
+    return res.status(503).json({ error: 'IPFS 未连接' });
+  }
+
   try {
     const chunks = [];
     for await (const chunk of ipfs.cat(cid)) {
@@ -400,20 +440,19 @@ app.post('/api/tweet', async (req, res) => {
       id: Date.now().toString()
     };
 
-    const tweetJSON = JSON.stringify(tweet);
-    const { cid } = await ipfs.add(tweetJSON);
-    
-    try {
-      const topic = 'social-tweets';
-      await ipfs.pubsub.publish(topic, Buffer.from(tweetJSON));
-      console.log('推文已通过 PubSub 广播');
-    } catch (pubsubError) {
-      console.warn('PubSub 广播失败，但推文已存储到 IPFS:', pubsubError.message);
+    if (ipfs) {
+      try {
+        const tweetJSON = JSON.stringify(tweet);
+        const topic = 'social-tweets';
+        await ipfs.pubsub.publish(topic, Buffer.from(tweetJSON));
+        console.log('推文已通过 PubSub 广播');
+      } catch (pubsubError) {
+        console.warn('PubSub 广播失败:', pubsubError.message);
+      }
     }
 
     res.json({ 
       success: true, 
-      cid: cid.toString(),
       tweet 
     });
   } catch (error) {
@@ -423,6 +462,10 @@ app.post('/api/tweet', async (req, res) => {
 });
 
 app.get('/api/tweet/:cid', async (req, res) => {
+  if (!ipfs) {
+    return res.status(503).json({ error: 'IPFS 未连接' });
+  }
+
   try {
     const { cid } = req.params;
     const chunks = [];
@@ -447,23 +490,40 @@ app.post('/api/profile', async (req, res) => {
       return res.status(400).json({ error: '缺少必要字段' });
     }
 
-    const profile = {
-      username,
-      bio: bio || '',
-      avatar: avatar || '',
-      publicKey,
-      timestamp: Date.now()
-    };
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', username)
+      .single();
 
-    const profileJSON = JSON.stringify(profile);
-    const { cid } = await ipfs.add(profileJSON);
+    if (checkError && checkError.code !== 'PGRST116') {
+      throw checkError;
+    }
 
-    registeredUsers.add(username);
+    if (existingUser) {
+      return res.status(400).json({ success: false, code: 'USERNAME_EXISTS', error: '用户名已存在' });
+    }
+
+    const { data: user, error: createError } = await supabase
+      .from('users')
+      .insert({
+        username,
+        nickname: username,
+        bio: bio || '欢迎使用 Mutual',
+        avatar: avatar || '',
+        public_key: publicKey
+      })
+      .select()
+      .single();
+
+    if (createError) {
+      throw createError;
+    }
 
     res.json({ 
       success: true, 
-      cid: cid.toString(),
-      profile 
+      cid: `ipfs-user-${username}-${Date.now()}`,
+      profile: user 
     });
   } catch (error) {
     console.error('创建资料错误:', error);
@@ -471,7 +531,38 @@ app.post('/api/profile', async (req, res) => {
   }
 });
 
+app.get('/api/profile', async (req, res) => {
+  try {
+    const { username } = req.query;
+    
+    let query = supabase.from('users').select('*');
+    
+    // 如果提供了用户名，只查询该用户
+    if (username) {
+      query = query.eq('username', username);
+    }
+    
+    const { data: users, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      users: username ? (users.length > 0 ? [users[0]] : []) : users
+    });
+  } catch (error) {
+    console.error('获取用户信息错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.get('/api/profile/:cid', async (req, res) => {
+  if (!ipfs) {
+    return res.status(503).json({ error: 'IPFS 未连接' });
+  }
+
   try {
     const { cid } = req.params;
     const chunks = [];
@@ -495,22 +586,29 @@ app.get('/api/subscribe', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  try {
-    await ipfs.pubsub.subscribe(topic, (msg) => {
-      const tweet = JSON.parse(msg.data.toString());
-      res.write(`data: ${JSON.stringify(tweet)}\n\n`);
-    });
+  if (ipfs) {
+    try {
+      await ipfs.pubsub.subscribe(topic, (msg) => {
+        const tweet = JSON.parse(msg.data.toString());
+        res.write(`data: ${JSON.stringify(tweet)}\n\n`);
+      });
 
-    res.on('close', async () => {
-      await ipfs.pubsub.unsubscribe(topic);
-    });
-  } catch (error) {
-    console.error('订阅错误:', error);
-    res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      res.on('close', async () => {
+        if (ipfs) {
+          await ipfs.pubsub.unsubscribe(topic);
+        }
+      });
+    } catch (error) {
+      console.error('订阅错误:', error);
+      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+    }
+  } else {
+    res.status(503).json({ error: 'IPFS 未连接' });
   }
 });
 
-initIPFS().then(() => {
+// 启动服务器
+initIPFS().finally(() => {
   app.listen(PORT, () => {
     console.log(`服务器运行在 http://localhost:${PORT}`);
   });

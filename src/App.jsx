@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import './App.css';
-import { supabase } from './supabase.js';
 
 const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
   ? 'http://localhost:3001' 
@@ -46,71 +45,69 @@ function App() {
       broadcastOnline();
       loadOfflineMessages();
       subscribeToMessages();
-      
-      // 订阅实时消息
-      const subscription = supabase
-        .from(`messages:to_user=eq.${username}`)
-        .on('INSERT', (payload) => {
-          const newMessage = {
-            id: payload.new.id.toString(),
-            from: payload.new.from_user,
-            to: payload.new.to_user,
-            content: payload.new.content,
-            type: payload.new.type,
-            fileName: payload.new.file_name,
-            fileType: payload.new.file_type,
-            fileSize: payload.new.file_size,
-            cid: payload.new.cid,
-            read: payload.new.read,
-            timestamp: payload.new.timestamp
-          };
-          
-          setMessages(prev => {
-            const exists = prev.some(msg => msg.id === newMessage.id);
-            if (!exists) {
-              return [...prev, newMessage];
-            }
-            return prev;
-          });
-        })
-        .subscribe();
-      
-      return () => subscription.unsubscribe();
     }
   }, [isLoggedIn, username]);
 
   const broadcastOnline = async () => {
-    // 使用 Supabase 时不需要此函数
-    console.log('用户在线:', username);
+    try {
+      await fetch(`${API_BASE}/api/user-online`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, publicKey })
+      });
+    } catch (error) {
+      console.error('广播在线状态失败:', error);
+    }
   };
 
   const loadOfflineMessages = async () => {
-    // 使用 Supabase 时不需要此函数
-    console.log('加载消息已由 Supabase 处理');
+    try {
+      const response = await fetch(`${API_BASE}/api/offline-messages/${username}`);
+      const data = await response.json();
+      
+      if (data.success && data.messages.length > 0) {
+        setMessages(prev => {
+          const newMessages = [...prev, ...data.messages];
+          localStorage.setItem('messages', JSON.stringify(newMessages));
+          return newMessages;
+        });
+      }
+    } catch (error) {
+      console.error('加载离线消息失败:', error);
+    }
   };
 
   const subscribeToMessages = () => {
-    // 使用 Supabase 实时订阅，不需要此函数
-    console.log('消息订阅已由 Supabase 处理');
+    const eventSource = new EventSource(`${API_BASE}/api/subscribe-messages/${username}`);
+    
+    eventSource.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      setMessages(prev => {
+        const exists = prev.some(m => m.id === message.id);
+        if (!exists) {
+          const updated = [...prev, message];
+          localStorage.setItem('messages', JSON.stringify(updated));
+          return updated;
+        }
+        return prev;
+      });
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('消息订阅错误:', error);
+      eventSource.close();
+    };
+
+    return () => eventSource.close();
   };
 
   const checkConnection = async () => {
     try {
-      // 检查 Supabase 连接
-      const { data, error } = await supabase
-        .from('users')
-        .select('count')
-        .limit(1);
-      
-      if (error) {
-        console.error('Supabase 连接检查失败:', error);
-        setConnected(false);
-      } else {
-        setConnected(true);
-      }
+      const response = await fetch(`${API_BASE}/api/health`);
+      const data = await response.json();
+      setConnected(data.ipfsConnected);
     } catch (error) {
       console.error('连接检查失败:', error);
-      setConnected(false);
     }
   };
 
@@ -133,15 +130,35 @@ function App() {
     try {
       setLoading(true);
 
-      const savedPublicKey = localStorage.getItem('publicKey');
+      let savedPublicKey = localStorage.getItem('publicKey');
+      
+      // 如果本地没有存储，尝试从服务器获取用户信息
       if (!savedPublicKey) {
-        alert('本地未找到用户信息，请重新注册');
-        setLoading(false);
-        return;
+        const response = await fetch(`${API_BASE}/api/profile?username=${encodeURIComponent(username)}`);
+        const data = await response.json();
+        
+        if (data.success && data.users && data.users.length > 0) {
+          const user = data.users[0];
+          
+          if (user && user.public_key) {
+            // 找到用户，更新本地存储
+            savedPublicKey = user.public_key;
+            localStorage.setItem('publicKey', savedPublicKey);
+            localStorage.setItem('username', username);
+            setPublicKey(savedPublicKey);
+          } else {
+            alert('用户不存在，请重新注册');
+            setLoading(false);
+            return;
+          }
+        } else {
+          alert('用户不存在，请重新注册');
+          setLoading(false);
+          return;
+        }
       }
 
       setIsLoggedIn(true);
-      alert('登录成功！');
     } catch (error) {
       console.error('登录失败:', error);
       alert('登录失败');
@@ -171,60 +188,27 @@ function App() {
 
       const keyPair = generateKeyPair();
       
-      try {
-        // 尝试使用 Supabase
-        const { data, error } = await supabase
-          .from('users')
-          .insert({
-            username,
-            bio: '欢迎使用 Mutual',
-            avatar: '',
-            public_key: keyPair.publicKey
-          })
-          .select();
-
-        if (error) {
-          console.warn('Supabase 注册失败，使用本地存储:', error);
-          throw error;
-        } else {
-          setProfileCid(`user-${username}`);
-          setPublicKey(keyPair.publicKey);
-          localStorage.setItem('profileCid', `user-${username}`);
-          localStorage.setItem('username', username);
-          localStorage.setItem('publicKey', keyPair.publicKey);
-          setIsLoggedIn(true);
-          alert('注册成功！');
-        }
-      } catch (supabaseError) {
-        // 使用本地存储作为备用方案
-        console.log('使用本地存储注册');
-        
-        // 检查用户名是否已存在
-        const existingUsers = JSON.parse(localStorage.getItem('localUsers') || '[]');
-        if (existingUsers.some(user => user.username === username)) {
-          alert('该用户名已被注册，请选择其他用户名');
-          return;
-        }
-        
-        // 保存用户信息到本地存储
-        const newUser = {
+      const response = await fetch(`${API_BASE}/api/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           username,
           bio: '欢迎使用 Mutual',
           avatar: '',
-          publicKey: keyPair.publicKey,
-          createdAt: Date.now()
-        };
-        
-        existingUsers.push(newUser);
-        localStorage.setItem('localUsers', JSON.stringify(existingUsers));
-        
-        setProfileCid(`user-${username}`);
+          publicKey: keyPair.publicKey
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setProfileCid(data.cid);
         setPublicKey(keyPair.publicKey);
-        localStorage.setItem('profileCid', `user-${username}`);
+        localStorage.setItem('profileCid', data.cid);
         localStorage.setItem('username', username);
         localStorage.setItem('publicKey', keyPair.publicKey);
         setIsLoggedIn(true);
-        alert('注册成功！(使用本地存储)');
+      } else if (data.code === 'USERNAME_EXISTS') {
+        alert('该用户名已被注册，请选择其他用户名');
       }
     } catch (error) {
       console.error('注册失败:', error);
@@ -250,14 +234,63 @@ function App() {
   };
 
   const subscribeToTweets = () => {
-    // 使用 Supabase 时不需要此函数
-    console.log('推文订阅已由消息系统处理');
+    const eventSource = new EventSource(`${API_BASE}/api/subscribe`);
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const tweet = JSON.parse(event.data);
+        if (!tweet.error) {
+          setTweets(prev => [tweet, ...prev]);
+        }
+      } catch (error) {
+        console.error('解析推文失败:', error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('EventSource 错误:', error);
+      eventSource.close();
+    };
+
+    return () => eventSource.close();
   };
 
   const postTweet = async () => {
-    // 使用消息系统代替推文
-    alert('请使用消息系统发送消息');
-    setShowCompose(false);
+    if (!content.trim()) {
+      alert('请输入推文内容');
+      return;
+    }
+
+    if (!username || !publicKey) {
+      alert('请先创建用户资料');
+      setShowCompose(true);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/api/tweet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          author: publicKey,
+          username,
+          timestamp: Date.now()
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setContent('');
+        setShowCompose(false);
+      }
+    } catch (error) {
+      console.error('发布推文失败:', error);
+      alert('发布推文失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatDate = (timestamp) => {
@@ -274,41 +307,10 @@ function App() {
     return new Date(timestamp).toLocaleDateString('zh-CN');
   };
 
-  const loadFriends = async () => {
-    try {
-      try {
-        // 尝试使用 Supabase
-        const { data, error } = await supabase
-          .from('friends')
-          .select('*')
-          .or(`user1.eq.${username},user2.eq.${username}`);
-
-        if (error) {
-          console.warn('Supabase 加载好友失败，使用本地存储:', error);
-          throw error;
-        } else {
-          const formattedFriends = data.map(friend => ({
-            username: friend.user1 === username ? friend.user2 : friend.user1,
-            publicKey: Math.random().toString(36).substring(2, 15),
-            addedAt: friend.added_at ? new Date(friend.added_at).getTime() : Date.now()
-          }));
-          setFriends(formattedFriends);
-          localStorage.setItem('friends', JSON.stringify(formattedFriends));
-        }
-      } catch (supabaseError) {
-        // 使用本地存储
-        console.log('使用本地存储加载好友');
-        const savedFriends = localStorage.getItem('friends');
-        if (savedFriends) {
-          setFriends(JSON.parse(savedFriends));
-        }
-      }
-    } catch (error) {
-      console.error('加载好友失败:', error);
-      const savedFriends = localStorage.getItem('friends');
-      if (savedFriends) {
-        setFriends(JSON.parse(savedFriends));
-      }
+  const loadFriends = () => {
+    const savedFriends = localStorage.getItem('friends');
+    if (savedFriends) {
+      setFriends(JSON.parse(savedFriends));
     }
   };
 
@@ -329,131 +331,41 @@ function App() {
     }
 
     try {
-      try {
-        // 尝试使用 Supabase
-        // 检查用户是否存在
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('username')
-          .eq('username', friendUsername)
-          .limit(1);
-
-        if (userError) {
-          console.warn('Supabase 检查用户失败，使用本地存储:', userError);
-          throw userError;
-        }
-
-        if (userData.length === 0) {
-          alert('该用户不存在，请确认用户名正确');
-          return;
-        }
-
-        // 添加好友关系
-        const { error: friendError } = await supabase
-          .from('friends')
-          .insert({
-            user1: username,
-            user2: friendUsername
-          });
-
-        if (friendError) {
-          if (friendError.code === '23505') {
-            alert('已经是好友了');
-          } else {
-            console.warn('Supabase 添加好友失败，使用本地存储:', friendError);
-            throw friendError;
-          }
-          return;
-        }
-
-        const newFriend = {
-          username: friendUsername,
-          publicKey: Math.random().toString(36).substring(2, 15),
-          addedAt: Date.now()
-        };
-
-        const updatedFriends = [...friends, newFriend];
-        setFriends(updatedFriends);
-        localStorage.setItem('friends', JSON.stringify(updatedFriends));
-        setFriendUsername('');
-        setShowAddFriend(false);
-        alert('好友添加成功！');
-      } catch (supabaseError) {
-        // 使用本地存储
-        console.log('使用本地存储添加好友');
-        
-        // 检查用户是否存在（从本地存储）
-        const localUsers = JSON.parse(localStorage.getItem('localUsers') || '[]');
-        const existingUser = localUsers.find(user => user.username === friendUsername);
-        
-        if (!existingUser) {
-          // 即使用户不存在，也允许添加（用于测试）
-          console.log('用户不存在于本地存储，允许添加用于测试');
-        }
-        
-        const newFriend = {
-          username: friendUsername,
-          publicKey: Math.random().toString(36).substring(2, 15),
-          addedAt: Date.now()
-        };
-
-        const updatedFriends = [...friends, newFriend];
-        setFriends(updatedFriends);
-        localStorage.setItem('friends', JSON.stringify(updatedFriends));
-        setFriendUsername('');
-        setShowAddFriend(false);
-        alert('好友添加成功！(使用本地存储)');
+      const response = await fetch(`${API_BASE}/api/check-user-online`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: friendUsername })
+      });
+      
+      const data = await response.json();
+      
+      if (!data.online) {
+        alert('该用户不在线或不存在，请确认用户名正确');
+        return;
       }
+
+      const newFriend = {
+        username: friendUsername,
+        publicKey: Math.random().toString(36).substring(2, 15),
+        addedAt: Date.now()
+      };
+
+      const updatedFriends = [...friends, newFriend];
+      setFriends(updatedFriends);
+      localStorage.setItem('friends', JSON.stringify(updatedFriends));
+      setFriendUsername('');
+      setShowAddFriend(false);
+      alert('好友添加成功！');
     } catch (error) {
       console.error('添加好友失败:', error);
       alert('添加好友失败');
     }
   };
 
-  const loadMessages = async () => {
-    try {
-      try {
-        // 尝试使用 Supabase
-        const { data, error } = await supabase
-          .from('messages')
-          .select('*')
-          .or(`from_user.eq.${username},to_user.eq.${username}`)
-          .order('timestamp', { ascending: true });
-
-        if (error) {
-          console.warn('Supabase 加载消息失败，使用本地存储:', error);
-          throw error;
-        } else {
-          const formattedMessages = data.map(msg => ({
-            id: msg.id.toString(),
-            from: msg.from_user,
-            to: msg.to_user,
-            content: msg.content,
-            type: msg.type,
-            fileName: msg.file_name,
-            fileType: msg.file_type,
-            fileSize: msg.file_size,
-            cid: msg.cid,
-            read: msg.read,
-            timestamp: msg.timestamp
-          }));
-          setMessages(formattedMessages);
-          localStorage.setItem('messages', JSON.stringify(formattedMessages));
-        }
-      } catch (supabaseError) {
-        // 使用本地存储
-        console.log('使用本地存储加载消息');
-        const savedMessages = localStorage.getItem('messages');
-        if (savedMessages) {
-          setMessages(JSON.parse(savedMessages));
-        }
-      }
-    } catch (error) {
-      console.error('加载消息失败:', error);
-      const savedMessages = localStorage.getItem('messages');
-      if (savedMessages) {
-        setMessages(JSON.parse(savedMessages));
-      }
+  const loadMessages = () => {
+    const savedMessages = localStorage.getItem('messages');
+    if (savedMessages) {
+      setMessages(JSON.parse(savedMessages));
     }
   };
 
@@ -461,56 +373,21 @@ function App() {
     if (!content.trim()) return;
 
     try {
-      const timestamp = Date.now();
-      
-      try {
-        // 尝试使用 Supabase
-        const { data, error } = await supabase
-          .from('messages')
-          .insert({
-            from_user: username,
-            to_user: toUser,
-            content,
-            type: 'text',
-            read: false,
-            timestamp
-          })
-          .select();
-
-        if (error) {
-          console.warn('Supabase 发送消息失败，使用本地存储:', error);
-          throw error;
-        } else {
-          const newMessage = {
-            id: data[0].id.toString(),
-            from: username,
-            to: toUser,
-            content,
-            type: 'text',
-            read: false,
-            timestamp,
-            cid: null
-          };
-          
-          const updatedMessages = [...messages, newMessage];
-          setMessages(updatedMessages);
-          localStorage.setItem('messages', JSON.stringify(updatedMessages));
-        }
-      } catch (supabaseError) {
-        // 使用本地存储
-        console.log('使用本地存储发送消息');
-        const newMessage = {
-          id: Date.now().toString(),
+      const response = await fetch(`${API_BASE}/api/send-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           from: username,
           to: toUser,
           content,
-          type: 'text',
-          read: false,
-          timestamp,
-          cid: null
-        };
-        
-        const updatedMessages = [...messages, newMessage];
+          timestamp: Date.now()
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        const updatedMessages = [...messages, data.message];
         setMessages(updatedMessages);
         localStorage.setItem('messages', JSON.stringify(updatedMessages));
       }
@@ -534,30 +411,20 @@ function App() {
     }
 
     try {
-      const groupId = Date.now().toString();
-      
-      const { data, error } = await supabase
-        .from('groups')
-        .insert({
-          group_id: groupId,
-          name: groupName,
-          creator: username
-        })
-        .select();
-
-      if (error) {
-        console.error('创建群组失败:', error);
-        alert('创建群组失败');
-      } else {
-        const newGroup = {
-          id: groupId,
-          name: groupName,
+      const response = await fetch(`${API_BASE}/api/create-group`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupName,
           creator: username,
-          members: [username],
-          createdAt: Date.now()
-        };
-        
-        setGroups([...groups, newGroup]);
+          members: [username]
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setGroups([...groups, data.group]);
         setGroupName('');
         setShowCreateGroup(false);
         alert('群组创建成功！');
@@ -572,56 +439,21 @@ function App() {
     if (!content.trim()) return;
 
     try {
-      const timestamp = Date.now();
-      
-      try {
-        // 尝试使用 Supabase
-        const { data, error } = await supabase
-          .from('messages')
-          .insert({
-            from_user: username,
-            to_user: groupId,
-            content,
-            type: 'text',
-            read: false,
-            timestamp
-          })
-          .select();
-
-        if (error) {
-          console.warn('Supabase 发送群消息失败，使用本地存储:', error);
-          throw error;
-        } else {
-          const newMessage = {
-            id: data[0].id.toString(),
-            from: username,
-            to: groupId,
-            content,
-            type: 'text',
-            read: false,
-            timestamp,
-            cid: null
-          };
-          
-          const updatedMessages = [...messages, newMessage];
-          setMessages(updatedMessages);
-          localStorage.setItem('messages', JSON.stringify(updatedMessages));
-        }
-      } catch (supabaseError) {
-        // 使用本地存储
-        console.log('使用本地存储发送群消息');
-        const newMessage = {
-          id: Date.now().toString(),
+      const response = await fetch(`${API_BASE}/api/send-group-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           from: username,
-          to: groupId,
+          groupId,
           content,
-          type: 'text',
-          read: false,
-          timestamp,
-          cid: null
-        };
-        
-        const updatedMessages = [...messages, newMessage];
+          timestamp: Date.now()
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        const updatedMessages = [...messages, data.message];
         setMessages(updatedMessages);
         localStorage.setItem('messages', JSON.stringify(updatedMessages));
       }
@@ -637,42 +469,22 @@ function App() {
       const fileData = e.target.result.split(',')[1];
       
       try {
-        const timestamp = Date.now();
-        const cid = `file-${Date.now()}`;
-        
-        const { data, error } = await supabase
-          .from('messages')
-          .insert({
-            from_user: username,
-            to_user: toUser,
-            type: 'file',
-            file_name: file.name,
-            file_type: file.type,
-            file_size: file.size,
-            cid: cid,
-            read: false,
-            timestamp
-          })
-          .select();
-
-        if (error) {
-          console.error('上传文件失败:', error);
-          alert('上传文件失败');
-        } else {
-          const newMessage = {
-            id: data[0].id.toString(),
-            from: username,
-            to: toUser,
-            type: 'file',
+        const response = await fetch(`${API_BASE}/api/upload-file`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileData,
             fileName: file.name,
             fileType: file.type,
-            fileSize: file.size,
-            cid: cid,
-            timestamp,
-            read: false
-          };
-          
-          const updatedMessages = [...messages, newMessage];
+            from: username,
+            to: toUser
+          })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          const updatedMessages = [...messages, data.message];
           setMessages(updatedMessages);
           localStorage.setItem('messages', JSON.stringify(updatedMessages));
           setShowFileUpload(false);
@@ -688,10 +500,15 @@ function App() {
 
   const downloadFile = async (cid, fileName) => {
     try {
-      // 由于我们使用了 Supabase 存储，这里应该从 Supabase 下载文件
-      // 但为了简化，我们暂时使用本地存储的模拟数据
-      alert('文件下载功能需要配置 Supabase Storage');
-      console.log('下载文件:', fileName, 'CID:', cid);
+      const response = await fetch(`${API_BASE}/api/download-file/${cid}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        const link = document.createElement('a');
+        link.href = `data:application/octet-stream;base64,${data.fileData}`;
+        link.download = fileName;
+        link.click();
+      }
     } catch (error) {
       console.error('下载文件失败:', error);
       alert('下载文件失败');

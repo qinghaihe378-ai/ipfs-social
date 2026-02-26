@@ -1,7 +1,9 @@
-const users = new Map();
-const messages = new Map();
-const groups = new Map();
-const onlineUsers = new Map();
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 'https://bysvhqhpvkvlejsntgka.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5c3ZocWhwdmt2bGVqc250Z2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNTg3MDgsImV4cCI6MjA4NzYzNDcwOH0.V9mtkwScomV7-2dbbfTDROt0SFXVPGC5HytPM5uktrU';
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,27 +21,70 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: '用户名不能为空' });
     }
 
-    const user = {
-      username,
-      bio: bio || '',
-      avatar: avatar || '',
-      publicKey: publicKey || '',
-      createdAt: Date.now()
-    };
+    try {
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', username)
+        .single();
 
-    users.set(username, user);
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
 
-    res.json({
-      success: true,
-      user,
-      cid: `ipfs-user-${username}-${Date.now()}`
-    });
+      if (existingUser) {
+        return res.status(400).json({ success: false, code: 'USERNAME_EXISTS', error: '用户名已存在' });
+      }
+
+      const { data: user, error: createError } = await supabase
+        .from('users')
+        .insert({
+          username,
+          nickname: username,
+          bio: bio || '欢迎使用 Mutual',
+          avatar: avatar || '',
+          public_key: publicKey || ''
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        throw createError;
+      }
+
+      res.json({
+        success: true,
+        user,
+        cid: `ipfs-user-${username}-${Date.now()}`
+      });
+    } catch (error) {
+      console.error('注册错误:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
   } else {
-    res.json({
-      success: true,
-      users: Array.from(users.values())
-    });
+    try {
+      const { username } = req.query;
+      
+      let query = supabase.from('users').select('*');
+      
+      // 如果提供了用户名，只查询该用户
+      if (username) {
+        query = query.eq('username', username);
+      }
+      
+      const { data: users, error } = await query;
+
+      if (error) {
+        throw error;
+      }
+
+      res.json({
+        success: true,
+        users: username ? (users.length > 0 ? [users[0]] : []) : users
+      });
+    } catch (error) {
+      console.error('获取用户信息错误:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
 }
-
-export { users, messages, groups, onlineUsers };
