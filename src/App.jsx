@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 
+const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+  ? 'http://localhost:3001' 
+  : '';
+
 function App() {
   const [tweets, setTweets] = useState([]);
   const [content, setContent] = useState('');
@@ -46,7 +50,7 @@ function App() {
 
   const broadcastOnline = async () => {
     try {
-      await fetch('http://localhost:3001/api/user-online', {
+      await fetch(`${API_BASE}/api/user-online`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, publicKey })
@@ -58,7 +62,7 @@ function App() {
 
   const loadOfflineMessages = async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/offline-messages/${username}`);
+      const response = await fetch(`${API_BASE}/api/offline-messages/${username}`);
       const data = await response.json();
       
       if (data.success && data.messages.length > 0) {
@@ -74,7 +78,7 @@ function App() {
   };
 
   const subscribeToMessages = () => {
-    const eventSource = new EventSource(`http://localhost:3001/api/subscribe-messages/${username}`);
+    const eventSource = new EventSource(`${API_BASE}/api/subscribe-messages/${username}`);
     
     eventSource.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -99,7 +103,7 @@ function App() {
 
   const checkConnection = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/health');
+      const response = await fetch(`${API_BASE}/api/health`);
       const data = await response.json();
       setConnected(data.ipfsConnected);
     } catch (error) {
@@ -164,7 +168,7 @@ function App() {
 
       const keyPair = generateKeyPair();
       
-      const response = await fetch('http://localhost:3001/api/profile', {
+      const response = await fetch(`${API_BASE}/api/profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -211,7 +215,7 @@ function App() {
   };
 
   const subscribeToTweets = () => {
-    const eventSource = new EventSource('http://localhost:3001/api/subscribe');
+    const eventSource = new EventSource(`${API_BASE}/api/subscribe`);
     
     eventSource.onmessage = (event) => {
       try {
@@ -246,7 +250,7 @@ function App() {
 
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/tweet', {
+      const response = await fetch(`${API_BASE}/api/tweet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -308,7 +312,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/check-user-online', {
+      const response = await fetch(`${API_BASE}/api/check-user-online`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: friendUsername })
@@ -350,7 +354,7 @@ function App() {
     if (!content.trim()) return;
 
     try {
-      const response = await fetch('http://localhost:3001/api/send-message', {
+      const response = await fetch(`${API_BASE}/api/send-message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -388,7 +392,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/create-group', {
+      const response = await fetch(`${API_BASE}/api/create-group`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -416,7 +420,7 @@ function App() {
     if (!content.trim()) return;
 
     try {
-      const response = await fetch('http://localhost:3001/api/send-group-message', {
+      const response = await fetch(`${API_BASE}/api/send-group-message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -446,7 +450,7 @@ function App() {
       const fileData = e.target.result.split(',')[1];
       
       try {
-        const response = await fetch('http://localhost:3001/api/upload-file', {
+        const response = await fetch(`${API_BASE}/api/upload-file`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -477,7 +481,7 @@ function App() {
 
   const downloadFile = async (cid, fileName) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/download-file/${cid}`);
+      const response = await fetch(`${API_BASE}/api/download-file/${cid}`);
       const data = await response.json();
       
       if (data.success) {
