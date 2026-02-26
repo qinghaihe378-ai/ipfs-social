@@ -58,7 +58,7 @@ function App() {
       await fetch(`${API_BASE}/api/user-online`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, publicKey })
+        body: JSON.stringify({ username })
       });
     } catch (error) {
       console.error('广播在线状态失败:', error);
@@ -344,9 +344,14 @@ function App() {
       
       const data = await response.json();
       
-      if (!data.online) {
-        alert('该用户不在线或不存在，请确认用户名正确');
+      if (!data.exists) {
+        alert('该用户不存在，请确认用户名正确');
         return;
+      }
+      
+      if (!data.online) {
+        alert('该用户不在线，添加后可以发送离线消息');
+        // 即使用户不在线，也允许添加好友
       }
 
       const newFriend = {

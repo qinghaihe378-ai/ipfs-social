@@ -94,21 +94,42 @@ app.post('/api/user-online', async (req, res) => {
   res.json({ success: true, username });
 });
 
-app.post('/api/check-user-online', (req, res) => {
+app.post('/api/check-user-online', async (req, res) => {
   const { username } = req.body;
   
   if (!username) {
     return res.status(400).json({ error: '缺少用户名' });
   }
 
-  const user = onlineUsers.get(username);
-  const isOnline = user && (Date.now() - user.lastSeen) < 60000;
+  // 检查用户是否存在于数据库中
+  try {
+    const { data: existingUser, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', username)
+      .single();
 
-  res.json({ 
-    online: isOnline, 
-    username,
-    lastSeen: user?.lastSeen || null
-  });
+    const userExists = !error && existingUser !== null;
+    
+    // 检查用户是否在线
+    const user = onlineUsers.get(username);
+    const isOnline = user && (Date.now() - user.lastSeen) < 60000;
+
+    res.json({ 
+      online: isOnline, 
+      exists: userExists,
+      username,
+      lastSeen: user?.lastSeen || null
+    });
+  } catch (error) {
+    console.error('检查用户状态错误:', error);
+    res.json({ 
+      online: false, 
+      exists: false,
+      username,
+      lastSeen: null
+    });
+  }
 });
 
 app.post('/api/send-message', async (req, res) => {
