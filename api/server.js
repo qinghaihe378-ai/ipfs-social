@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import { createClient } from '@supabase/supabase-js';
+import { NFTStorage } from 'nft.storage';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -13,22 +14,26 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
+const nftStorageToken = process.env.NFT_STORAGE_API_KEY || '';
+const nftstorage = nftStorageToken ? new NFTStorage({ token: nftStorageToken }) : null;
+
 const onlineUsers = new Map();
 const offlineMessages = new Map();
 const groups = new Map();
 
 console.log('API服务器初始化中...');
 console.log('Supabase连接状态:', supabase ? '已配置' : '未配置');
-console.log('IPFS功能: 在Serverless环境中暂时禁用');
+console.log('IPFS功能:', nftstorage ? '已启用 (NFT.Storage)' : '未配置');
 
 
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    ipfsConnected: !!ipfs,
+    ipfsConnected: !!nftstorage,
     env: {
       supabaseUrl: process.env.SUPABASE_URL ? 'set' : 'not set',
-      supabaseAnonKey: process.env.SUPABASE_ANON_KEY ? 'set' : 'not set'
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY ? 'set' : 'not set',
+      nftStorageApiKey: process.env.NFT_STORAGE_API_KEY ? 'set' : 'not set'
     }
   });
 });
@@ -168,7 +173,20 @@ app.post('/api/profile', async (req, res) => {
       throw createError;
     }
 
-    const cid = `ipfs-user-${username}-${Date.now()}`;
+    let cid = `ipfs-user-${username}-${Date.now()}`;
+    
+    if (nftstorage) {
+      try {
+        const userData = JSON.stringify(user);
+        const blob = new Blob([userData], { type: 'application/json' });
+        const cidResult = await nftstorage.storeBlob(blob);
+        cid = cidResult;
+        console.log('用户资料已上传到 IPFS:', cid);
+      } catch (ipfsError) {
+        console.warn('IPFS 上传失败:', ipfsError.message);
+        cid = `ipfs-user-${username}-${Date.now()}`;
+      }
+    }
 
     res.json({ 
       success: true, 
@@ -224,7 +242,16 @@ app.post('/api/tweet', async (req, res) => {
       id: Date.now().toString()
     };
 
-
+    if (nftstorage) {
+      try {
+        const tweetJSON = JSON.stringify(tweet);
+        const blob = new Blob([tweetJSON], { type: 'application/json' });
+        const cid = await nftstorage.storeBlob(blob);
+        console.log('推文已上传到 IPFS:', cid);
+      } catch (ipfsError) {
+        console.warn('IPFS 上传失败:', ipfsError.message);
+      }
+    }
 
     res.json({ 
       success: true, 
@@ -267,7 +294,16 @@ app.post('/api/send-message', async (req, res) => {
       console.log('用户离线，存储离线消息:', message);
     }
 
-
+    if (nftstorage) {
+      try {
+        const messageJSON = JSON.stringify(message);
+        const blob = new Blob([messageJSON], { type: 'application/json' });
+        const cid = await nftstorage.storeBlob(blob);
+        console.log('消息已上传到 IPFS:', cid);
+      } catch (ipfsError) {
+        console.warn('IPFS 上传失败:', ipfsError.message);
+      }
+    }
 
     res.json({ 
       success: true, 
