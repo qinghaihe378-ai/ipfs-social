@@ -570,10 +570,15 @@ function App() {
     }
   };
 
-  const loadGroups = async () => {
-    console.log('loadGroups 被调用, 当前username:', username);
+  const loadGroups = async (forceUsername) => {
+    const user = forceUsername || username;
+    console.log('loadGroups 被调用, 当前username:', user);
+    if (!user) {
+      console.log('username为空，跳过加载群组');
+      return;
+    }
     try {
-      const response = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(username)}`);
+      const response = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(user)}`);
       const data = await response.json();
       console.log('加载群组数据:', data);
       if (data.success && data.groups && data.groups.length > 0) {
@@ -789,9 +794,15 @@ function App() {
           avatar: savedAvatars[newGroup.id] || null
         };
         
-        const updatedGroups = [...groups, groupWithAvatar];
-        setGroups(updatedGroups);
-        localStorage.setItem('groups', JSON.stringify(updatedGroups));
+        console.log('创建群组成功，新群组:', groupWithAvatar);
+        console.log('当前groups:', groups);
+        
+        setGroups(prevGroups => {
+          const updatedGroups = [...prevGroups, groupWithAvatar];
+          console.log('更新后的groups:', updatedGroups);
+          localStorage.setItem('groups', JSON.stringify(updatedGroups));
+          return updatedGroups;
+        });
         
         setGroupName('');
         setSelectedFriendsForGroup([]);
