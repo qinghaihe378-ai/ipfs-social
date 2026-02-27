@@ -1,0 +1,12 @@
+{
+  "build": {
+    "command": "npm install",
+    "outputDirectory": "."
+  },
+  "start": {
+    "command": "node server.js",
+    "env": {
+      "NODE_ENV": "production"
+    }
+  }
+}
