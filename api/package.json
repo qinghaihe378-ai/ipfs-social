@@ -11,7 +11,9 @@
     "@supabase/supabase-js": "^2.97.0",
     "body-parser": "^2.2.2",
     "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
     "express": "^5.2.1",
+    "ipfs-http-client": "^60.0.1",
     "nft.storage": "^7.1.1"
   },
   "engines": {
