@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import Wallet from './components/Wallet';
+import Bot from './components/Bot';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -23,7 +24,12 @@ function App() {
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [editUsername, setEditUsername] = useState('');
   const [editBio, setEditBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState(localStorage.getItem('avatarUrl') || '');
+  const avatarInputRef = useRef(null);
+  const [showFriendProfile, setShowFriendProfile] = useState(false);
+  const [selectedFriend, setSelectedFriend] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [groups, setGroups] = useState([]);
@@ -41,9 +47,11 @@ function App() {
   useEffect(() => {
     checkConnection();
     loadProfile();
-    subscribeToTweets();
+    loadTweets();
     loadFriends();
     loadMessages();
+    const cleanup = subscribeToTweets();
+    return cleanup;
   }, []);
 
   useEffect(() => {
@@ -288,6 +296,7 @@ function App() {
 
       const data = await response.json();
       if (data.success) {
+        setTweets(prev => [data.tweet, ...prev]);
         setContent('');
         setShowCompose(false);
       }
@@ -318,6 +327,12 @@ function App() {
     if (savedFriends) {
       setFriends(JSON.parse(savedFriends));
     }
+  };
+
+  const removeFriend = (friendUsername) => {
+    const updatedFriends = friends.filter(f => f.username !== friendUsername);
+    setFriends(updatedFriends);
+    localStorage.setItem('friends', JSON.stringify(updatedFriends));
   };
 
   const addFriend = async () => {
@@ -380,6 +395,18 @@ function App() {
     }
   };
 
+  const loadTweets = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/tweets`);
+      const data = await response.json();
+      if (data.tweets) {
+        setTweets(data.tweets);
+      }
+    } catch (error) {
+      console.error('加载动态失败:', error);
+    }
+  };
+
   // 表情包数据
   const emojis = [
     '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
@@ -424,7 +451,6 @@ function App() {
     if (!content.trim() || !username || !toUser) return;
 
     try {
-      // 先创建消息对象
       const newMessage = {
         id: Date.now().toString(),
         from: username,
@@ -433,12 +459,10 @@ function App() {
         timestamp: Date.now()
       };
 
-      // 先在本地显示消息
       const updatedMessages = [...messages, newMessage];
       setMessages(updatedMessages);
       localStorage.setItem('messages', JSON.stringify(updatedMessages));
 
-      // 尝试发送到服务器
       const response = await fetch(`${API_BASE}/api/send-message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -457,8 +481,22 @@ function App() {
       }
     } catch (error) {
       console.error('发送消息失败:', error);
-      // 不显示错误提示，因为消息已经在本地显示了
     }
+  };
+
+  const deleteMessage = (messageId) => {
+    const updatedMessages = messages.filter(msg => msg.id !== messageId);
+    setMessages(updatedMessages);
+    localStorage.setItem('messages', JSON.stringify(updatedMessages));
+  };
+
+  const clearChatMessages = (friendUsername) => {
+    const updatedMessages = messages.filter(
+      msg => !((msg.from === username && msg.to === friendUsername) ||
+               (msg.from === friendUsername && msg.to === username))
+    );
+    setMessages(updatedMessages);
+    localStorage.setItem('messages', JSON.stringify(updatedMessages));
   };
 
   const getChatMessages = (friendUsername) => {
@@ -682,6 +720,13 @@ function App() {
             <span>私信</span>
           </button>
           
+          <button className={`nav-item ${activeTab === 'bot' ? 'active' : ''}`} onClick={() => setActiveTab('bot')}>
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2a2 2 0 0 0-2 2c0 .74.4 1.39 1 1.73V7H8a4 4 0 0 0-4 4v1H2v2h2v1a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-1h2v-2h-2v-1a4 4 0 0 0-4-4h-3V5.73c.6-.34 1-.99 1-1.73a2 2 0 0 0-2-2zm-4 9a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm8 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm-4 3c1.5 0 3 .75 3 2H9c0-1.25 1.5-2 3-2z"/>
+            </svg>
+            <span>Bot</span>
+          </button>
+          
           <button className={`nav-item ${activeTab === 'bookmarks' ? 'active' : ''}`} onClick={() => setActiveTab('bookmarks')}>
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5zM6.5 4c-.276 0-.5.22-.5.5v14.56l6-4.29 6 4.29V4.5c0-.28-.224-.5-.5-.5h-11z"/>
@@ -694,13 +739,6 @@ function App() {
               <path d="M5.651 19h12.698c-.337-1.8-1.023-3.21-1.945-4.19C15.318 13.65 13.838 13 12 13s-3.317.65-4.404 1.81c-.922.98-1.608 2.39-1.945 4.19zm.486-5.56C7.627 11.85 9.648 11 12 11s4.373.85 5.863 2.44c1.477 1.58 2.366 3.8 2.632 6.46l.11 1.1H3.395l.11-1.1c.266-2.66 1.155-4.88 2.632-6.46zM12 4c-1.105 0-2 .9-2 2s.895 2 2 2 2-.9 2-2-.895-2-2-2zM8 6c0-2.21 1.791-4 4-4s4 1.79 4 4-1.791 4-4 4-4-1.79-4-4z"/>
             </svg>
             <span>个人资料</span>
-          </button>
-          
-          <button className={`nav-item ${activeTab === 'wallet' ? 'active' : ''}`} onClick={() => setActiveTab('wallet')}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm0 12H4V9h16v10zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81 0 1.79 1.49 2.69 3.66 3.21 1.95.46 2.34 1.15 2.34 1.87 0 .53-.39 1.39-2.1 1.39-1.6 0-2.23-.72-2.32-1.64H8.04c.1 1.7 1.36 2.66 2.86 2.97V19h2.34v-1.67c1.52-.29 2.72-1.16 2.73-2.77-.01-2.2-1.9-2.96-3.66-3.42z"/>
-            </svg>
-            <span>钱包</span>
           </button>
         </div>
         
@@ -804,16 +842,32 @@ function App() {
                     <div className="chat-user">
                       <span className="chat-username">{selectedChat}</span>
                     </div>
-                    <button className="chat-more-btn">
+                    <button 
+                      className="chat-more-btn" 
+                      onClick={() => {
+                        if (confirm('确定要清空与该好友的聊天记录吗？')) {
+                          clearChatMessages(selectedChat);
+                        }
+                      }}
+                    >
                       <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                       </svg>
                     </button>
                   </div>
                   
                   <div className="chat-messages">
                     {getChatMessages(selectedChat).map(msg => (
-                      <div key={msg.id} className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}>
+                      <div 
+                        key={msg.id} 
+                        className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          if (confirm('确定要删除这条消息吗？')) {
+                            deleteMessage(msg.id);
+                          }
+                        }}
+                      >
                         {msg.from !== username && (
                           <div className="message-avatar">
                             {msg.from.charAt(0).toUpperCase()}
@@ -944,26 +998,6 @@ function App() {
                     <div className="contact-name">群聊</div>
                   </div>
                 </div>
-                <div className="contact-item" onClick={() => {}}>
-                  <div className="contact-icon blue">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16zM16 17H5V7h11l3.55 5L16 17z"/>
-                    </svg>
-                  </div>
-                  <div className="contact-info">
-                    <div className="contact-name">标签</div>
-                  </div>
-                </div>
-                <div className="contact-item" onClick={() => {}}>
-                  <div className="contact-icon yellow">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-                    </svg>
-                  </div>
-                  <div className="contact-info">
-                    <div className="contact-name">公众号</div>
-                  </div>
-                </div>
                 
                 {friends.length > 0 && (
                   <>
@@ -984,13 +1018,22 @@ function App() {
                         {friendsList.map(friend => (
                           <div 
                             key={friend.username} 
-                            className="contact-item" 
-                            onClick={() => { setSelectedChat(friend.username); setActiveTab('messages'); }}
+                            className="contact-item"
                           >
-                            <div className="contact-avatar">
+                            <div 
+                              className="contact-avatar"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedFriend(friend);
+                                setShowFriendProfile(true);
+                              }}
+                            >
                               {friend.username.charAt(0).toUpperCase()}
                             </div>
-                            <div className="contact-info">
+                            <div 
+                              className="contact-info"
+                              onClick={() => { setSelectedChat(friend.username); setActiveTab('messages'); }}
+                            >
                               <div className="contact-name">{friend.username}</div>
                             </div>
                           </div>
@@ -1022,10 +1065,10 @@ function App() {
                   tweets.map(tweet => (
                     <div key={tweet.id} className="moment-item">
                       <div className="moment-avatar">
-                        {tweet.author.charAt(0).toUpperCase()}
+                        {(tweet.username || tweet.author).charAt(0).toUpperCase()}
                       </div>
                       <div className="moment-content">
-                        <div className="moment-author">{tweet.author}</div>
+                        <div className="moment-author">{tweet.username || tweet.author}</div>
                         <div className="moment-text">{tweet.content}</div>
                         <div className="moment-time">{formatDate(tweet.timestamp)}</div>
                       </div>
@@ -1092,16 +1135,32 @@ function App() {
                     <div className="chat-user">
                       <span className="chat-username">{selectedChat}</span>
                     </div>
-                    <button className="chat-more-btn">
+                    <button 
+                      className="chat-more-btn" 
+                      onClick={() => {
+                        if (confirm('确定要清空与该好友的聊天记录吗？')) {
+                          clearChatMessages(selectedChat);
+                        }
+                      }}
+                    >
                       <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                       </svg>
                     </button>
                   </div>
                   
                   <div className="chat-messages">
                     {getChatMessages(selectedChat).map(msg => (
-                      <div key={msg.id} className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}>
+                      <div 
+                        key={msg.id} 
+                        className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          if (confirm('确定要删除这条消息吗？')) {
+                            deleteMessage(msg.id);
+                          }
+                        }}
+                      >
                         {msg.from !== username && (
                           <div className="message-avatar">
                             {msg.from.charAt(0).toUpperCase()}
@@ -1209,13 +1268,9 @@ function App() {
             </div>
           )}
 
-          {activeTab === 'wallet' && (
-            <div className="wallet-content">
-              <Wallet />
-            </div>
+          {activeTab === 'bot' && (
+            <Bot />
           )}
-
-
 
           {activeTab === 'profile' && (
             <div className="profile-content">
@@ -1228,9 +1283,13 @@ function App() {
                 setEditBio(localStorage.getItem('bio') || '');
                 setShowProfileEdit(true);
               }}>
-                <div className="profile-card-avatar">
-                  {(nickname || username) ? (nickname || username).charAt(0).toUpperCase() : '?'}
-                </div>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="avatar" className="profile-card-avatar-img" />
+                ) : (
+                  <div className="profile-card-avatar">
+                    {(nickname || username) ? (nickname || username).charAt(0).toUpperCase() : '?'}
+                  </div>
+                )}
                 <div className="profile-card-info">
                   <div className="profile-card-name">{nickname || username || '未登录'}</div>
                   <div className="profile-card-id">Mutual ID: {username ? username.substring(0, 8) : 'mid_xxxxx'}</div>
@@ -1251,6 +1310,19 @@ function App() {
               </div>
 
               <div className="profile-section">
+                <div className="profile-item" onClick={() => setShowWalletModal(true)}>
+                  <div className="profile-item-icon wallet-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                    </svg>
+                  </div>
+                  <div className="profile-item-text">钱包</div>
+                  <div className="profile-item-arrow">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
+                    </svg>
+                  </div>
+                </div>
                 <div className="profile-item">
                   <div className="profile-item-icon favorite-icon">
                     <svg viewBox="0 0 24 24" fill="currentColor">
@@ -1377,17 +1449,17 @@ function App() {
           </svg>
           <span>发现</span>
         </button>
+        <button className={`mobile-nav-item ${activeTab === 'bot' ? 'active' : ''}`} onClick={() => setActiveTab('bot')}>
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2a2 2 0 0 0-2 2c0 .74.4 1.39 1 1.73V7H8a4 4 0 0 0-4 4v1H2v2h2v1a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-1h2v-2h-2v-1a4 4 0 0 0-4-4h-3V5.73c.6-.34 1-.99 1-1.73a2 2 0 0 0-2-2zm-4 9a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm8 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm-4 3c1.5 0 3 .75 3 2H9c0-1.25 1.5-2 3-2z"/>
+          </svg>
+          <span>Bot</span>
+        </button>
         <button className={`mobile-nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
           </svg>
           <span>我</span>
-        </button>
-        <button className={`mobile-nav-item ${activeTab === 'wallet' ? 'active' : ''}`} onClick={() => setActiveTab('wallet')}>
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm0 12H4V9h16v10zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81 0 1.79 1.49 2.69 3.66 3.21 1.95.46 2.34 1.15 2.34 1.87 0 .53-.39 1.39-2.1 1.39-1.6 0-2.23-.72-2.32-1.64H8.04c.1 1.7 1.36 2.66 2.86 2.97V19h2.34v-1.67c1.52-.29 2.72-1.16 2.73-2.77-.01-2.2-1.9-2.96-3.66-3.42z"/>
-          </svg>
-          <span>钱包</span>
         </button>
       </nav>
 
@@ -1418,36 +1490,6 @@ function App() {
               maxLength={500}
               autoFocus
             />
-            <div className="compose-options">
-              <div className="compose-option">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
-                <span>所在位置</span>
-                <svg className="option-arrow" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-                </svg>
-              </div>
-              <div className="compose-option">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-                </svg>
-                <span>提醒谁看</span>
-                <svg className="option-arrow" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-                </svg>
-              </div>
-              <div className="compose-option">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
-                <span>谁可以看</span>
-                <div className="option-value">公开</div>
-                <svg className="option-arrow" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-                </svg>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -1462,15 +1504,56 @@ function App() {
               </svg>
             </button>
             <div className="profile-edit-title">个人信息</div>
-            <div className="header-placeholder"></div>
+            <button 
+              className="save-btn-header"
+              onClick={() => {
+                if (editUsername.trim()) {
+                  setNickname(editUsername);
+                  localStorage.setItem('nickname', editUsername);
+                  localStorage.setItem('bio', editBio);
+                  setShowProfileEdit(false);
+                } else {
+                  alert('昵称不能为空');
+                }
+              }}
+            >
+              保存
+            </button>
           </div>
 
           <div className="profile-edit-content">
-            <div className="profile-edit-item">
+            <div className="profile-edit-item avatar-edit-item" onClick={() => avatarInputRef.current?.click()}>
               <div className="edit-label">头像</div>
-              <div className="edit-avatar">
-                {(editUsername || username) ? (editUsername || username).charAt(0).toUpperCase() : '?'}
+              <div className="edit-avatar-wrapper">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="avatar" className="edit-avatar-img" />
+                ) : (
+                  <div className="edit-avatar">
+                    {(editUsername || username) ? (editUsername || username).charAt(0).toUpperCase() : '?'}
+                  </div>
+                )}
+                <svg className="avatar-edit-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
               </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const url = reader.result;
+                      setAvatarUrl(url);
+                      localStorage.setItem('avatarUrl', url);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
             </div>
 
             <div className="profile-edit-item">
@@ -1499,23 +1582,78 @@ function App() {
                 placeholder="请输入个性签名"
               />
             </div>
+          </div>
+        </div>
+      )}
 
-            <button 
-              className="save-btn"
-              onClick={() => {
-                if (editUsername.trim()) {
-                  setNickname(editUsername);
-                  localStorage.setItem('nickname', editUsername);
-                  localStorage.setItem('bio', editBio);
-                  setShowProfileEdit(false);
-                  alert('个人资料已保存');
-                } else {
-                  alert('昵称不能为空');
-                }
-              }}
-            >
-              保存
+      {/* 好友资料页面 */}
+      {showFriendProfile && selectedFriend && (
+        <div className="friend-profile-page">
+          <div className="friend-profile-header">
+            <button className="back-btn" onClick={() => {
+              setShowFriendProfile(false);
+              setSelectedFriend(null);
+            }}>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+              </svg>
             </button>
+            <div className="friend-profile-title">详细资料</div>
+            <div className="header-placeholder"></div>
+          </div>
+
+          <div className="friend-profile-content">
+            <div className="friend-profile-card">
+              <div className="friend-profile-avatar">
+                {selectedFriend.username.charAt(0).toUpperCase()}
+              </div>
+              <div className="friend-profile-info">
+                <div className="friend-profile-name">{selectedFriend.username}</div>
+                <div className="friend-profile-id">Mutual ID: {selectedFriend.username.substring(0, 8)}</div>
+              </div>
+            </div>
+
+            <div className="friend-profile-section">
+              <div className="friend-profile-item">
+                <div className="friend-item-label">来源</div>
+                <div className="friend-item-value">通过搜索添加</div>
+              </div>
+              <div className="friend-profile-item">
+                <div className="friend-item-label">添加时间</div>
+                <div className="friend-item-value">{new Date().toLocaleDateString()}</div>
+              </div>
+            </div>
+
+            <div className="friend-profile-actions">
+              <button 
+                className="friend-action-btn primary"
+                onClick={() => {
+                  setSelectedChat(selectedFriend.username);
+                  setShowFriendProfile(false);
+                  setActiveTab('messages');
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                </svg>
+                发消息
+              </button>
+              <button 
+                className="friend-action-btn danger"
+                onClick={() => {
+                  if (confirm(`确定要删除好友 ${selectedFriend.username} 吗？`)) {
+                    removeFriend(selectedFriend.username);
+                    setShowFriendProfile(false);
+                    setSelectedFriend(null);
+                  }
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                </svg>
+                删除好友
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1612,6 +1750,24 @@ function App() {
                 <div className="settings-item-text logout-text">退出登录</div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 钱包模态框 */}
+      {showWalletModal && (
+        <div className="wallet-page">
+          <div className="wallet-page-header">
+            <button className="back-btn" onClick={() => setShowWalletModal(false)}>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+              </svg>
+            </button>
+            <div className="wallet-page-title">钱包</div>
+            <div className="header-placeholder"></div>
+          </div>
+          <div className="wallet-page-content">
+            <Wallet />
           </div>
         </div>
       )}

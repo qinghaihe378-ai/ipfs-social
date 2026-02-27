@@ -117,6 +117,42 @@ class WalletManager {
     return false;
   }
 
+  getWallet() {
+    if (!this.wallet) {
+      throw new Error('Wallet not initialized');
+    }
+    return this.wallet;
+  }
+
+  getAddress() {
+    return this.wallet ? this.wallet.address : null;
+  }
+
+  isWalletInitialized() {
+    return this.wallet !== null;
+  }
+
+  getCurrentNetwork() {
+    return { key: this.currentNetwork, ...NETWORKS[this.currentNetwork] };
+  }
+
+  getAllNetworks() {
+    return Object.keys(NETWORKS).map(key => ({
+      key,
+      ...NETWORKS[key]
+    }));
+  }
+
+  connect() {
+    this.loadFromStorage();
+  }
+
+  logout() {
+    this.wallet = null;
+    this.provider = null;
+    localStorage.removeItem('wallet');
+  }
+
   async getBalance() {
     if (!this.wallet || !this.provider) {
       throw new Error('Wallet not initialized');
@@ -161,34 +197,6 @@ class WalletManager {
       maxFeePerGas: gasPrice.maxFeePerGas?.toString() || '0',
       maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas?.toString() || '0'
     };
-  }
-
-  getAddress() {
-    return this.wallet?.address || null;
-  }
-
-  getCurrentNetwork() {
-    return {
-      key: this.currentNetwork,
-      ...NETWORKS[this.currentNetwork]
-    };
-  }
-
-  getAllNetworks() {
-    return Object.keys(NETWORKS).map(key => ({
-      key,
-      ...NETWORKS[key]
-    }));
-  }
-
-  isWalletInitialized() {
-    return this.wallet !== null;
-  }
-
-  logout() {
-    this.wallet = null;
-    this.provider = null;
-    localStorage.removeItem('wallet');
   }
 }
 
