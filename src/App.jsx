@@ -1837,7 +1837,7 @@ function App() {
       </aside>
 
       {/* 移动端底部导航栏 */}
-      <nav className="mobile-nav">
+      <nav className="mobile-nav" style={{ display: (selectedChat || showGroupInfo || showFriendProfile || showAddFriend || showCreateGroup || showSettings || showWalletModal || showInviteFriend) ? 'none' : '' }}>
         <button className={`mobile-nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
