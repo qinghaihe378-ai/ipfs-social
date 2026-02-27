@@ -3529,6 +3529,44 @@ body {
     margin: 4px 0;
   }
 
+  .login-divider {
+    display: flex;
+    align-items: center;
+    margin: 20px 0;
+  }
+
+  .login-divider::before,
+  .login-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .login-divider span {
+    padding: 0 16px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+  }
+
+  .wallet-login-btn {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .wallet-login-btn:hover {
+    background: linear-gradient(135deg, #2a2a4e 0%, #263056 100%) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+  }
+
+  .wallet-login-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
   .login-switch {
     text-align: center;
     margin-top: 16px;

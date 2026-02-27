@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import Wallet from './components/Wallet';
 import Bot from './components/Bot';
+import walletManager from './utils/wallet';
 
 const API_BASE = import.meta.env.PROD ? 'https://ipfs-social.vercel.app' : 'http://localhost:3001';
 
@@ -272,6 +273,70 @@ function App() {
     } catch (error) {
       console.error('注册失败:', error);
       alert('注册失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const walletLogin = async () => {
+    try {
+      setLoading(true);
+      
+      let walletAddress;
+      let isNewWallet = false;
+      
+      if (!walletManager.isWalletInitialized()) {
+        const walletData = walletManager.createWallet();
+        walletAddress = walletData.address;
+        isNewWallet = true;
+        console.log('创建新钱包:', walletAddress);
+      } else {
+        walletAddress = walletManager.getAddress();
+        console.log('使用已有钱包:', walletAddress);
+      }
+      
+      const shortId = walletAddress.slice(0, 8).toLowerCase();
+      const displayUsername = `user_${shortId}`;
+      
+      const response = await fetch(`${API_BASE}/api/profile?username=${encodeURIComponent(displayUsername)}`);
+      const data = await response.json();
+      
+      if (data.success && data.users && data.users.length > 0) {
+        const user = data.users[0];
+        setUsername(user.username || displayUsername);
+        setPublicKey(user.public_key || walletAddress);
+        localStorage.setItem('username', user.username || displayUsername);
+        localStorage.setItem('publicKey', user.public_key || walletAddress);
+        setIsLoggedIn(true);
+        console.log('钱包登录成功(已有用户):', user.username);
+      } else {
+        const keyPair = generateKeyPair();
+        const registerResponse = await fetch(`${API_BASE}/api/profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: displayUsername,
+            bio: isNewWallet ? '新用户，通过钱包创建' : '钱包用户',
+            avatar: '',
+            publicKey: walletAddress
+          })
+        });
+        
+        const registerData = await registerResponse.json();
+        if (registerData.success) {
+          setUsername(displayUsername);
+          setPublicKey(walletAddress);
+          localStorage.setItem('username', displayUsername);
+          localStorage.setItem('publicKey', walletAddress);
+          setIsLoggedIn(true);
+          console.log('钱包登录成功(新用户):', displayUsername);
+        } else {
+          alert('钱包登录失败，请重试');
+        }
+      }
+    } catch (error) {
+      console.error('钱包登录失败:', error);
+      alert('钱包登录失败: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -1043,6 +1108,21 @@ function App() {
                   </div>
                 </>
               )}
+              
+              <div className="login-divider">
+                <span>或</span>
+              </div>
+              
+              <button 
+                className="login-button wallet-login-btn"
+                onClick={walletLogin}
+                disabled={loading}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '8px' }}>
+                  <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                </svg>
+                {loading ? '登录中...' : '钱包登录'}
+              </button>
               
               <div className="login-info">
                 <p>基于 IPFS + PubSub 的去中心化社交网络</p>
