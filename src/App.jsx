@@ -1169,7 +1169,7 @@ function App() {
               {!selectedChat ? (
                 <>
                   <div className="wechat-header">
-                    <div className="wechat-title">Mutual</div>
+                    <div className="wechat-title">消息</div>
                     <button className="wechat-add-btn" onClick={() => setShowAddFriend(true)}>
                       <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
@@ -1177,26 +1177,51 @@ function App() {
                     </button>
                   </div>
                   <div className="messages-list">
-                    {friends.length === 0 ? (
+                    {friends.length === 0 && groups.length === 0 ? (
                       <div className="empty-state">
-                        <p>暂无好友，点击右上角添加</p>
+                        <p>暂无好友，点击右上角添加好友</p>
                       </div>
                     ) : (
-                      friends.map(friend => (
-                        <div key={friend.username} className="message-item" onClick={() => setSelectedChat(friend.username)}>
-                          <div className="message-avatar">
-                            {getInitial(friend.username)}
-                          </div>
-                          <div className="message-info">
-                            <div className="message-name">{friend.username}</div>
-                            <div className="message-preview">
-                              {getChatMessages(friend.username).length > 0
-                                ? getChatMessages(friend.username)[getChatMessages(friend.username).length - 1].content
-                                : '暂无消息'}
+                      <>
+                        {groups && groups.map(group => {
+                          const unreadCount = getUnreadCount(`group:${group.id}`);
+                          return (
+                          <div key={group.id} className="message-item" onClick={() => { setSelectedChat(`group:${group.id}`); markAsRead(`group:${group.id}`); }}>
+                            <div className="message-avatar">
+                              {getInitial(group.name)}
+                              {unreadCount > 0 && <div className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</div>}
+                            </div>
+                            <div className="message-info">
+                              <div className="message-name">{group.name}</div>
+                              <div className="message-preview">
+                                {getChatMessages(`group:${group.id}`).length > 0
+                                  ? getChatMessages(`group:${group.id}`)[getChatMessages(`group:${group.id}`).length - 1].content
+                                  : '暂无消息'}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))
+                          );
+                        })}
+                        {friends && friends.map(friend => {
+                          const unreadCount = getUnreadCount(friend.username);
+                          return (
+                          <div key={friend.username} className="message-item" onClick={() => { setSelectedChat(friend.username); markAsRead(friend.username); }}>
+                            <div className="message-avatar">
+                              {getInitial(friend.username)}
+                              {unreadCount > 0 && <div className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</div>}
+                            </div>
+                            <div className="message-info">
+                              <div className="message-name">{friend.username}</div>
+                              <div className="message-preview">
+                                {getChatMessages(friend.username).length > 0
+                                  ? getChatMessages(friend.username)[getChatMessages(friend.username).length - 1].content
+                                  : '暂无消息'}
+                              </div>
+                            </div>
+                          </div>
+                          );
+                        })}
+                      </>
                     )}
                   </div>
                 </>
