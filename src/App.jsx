@@ -37,6 +37,7 @@ function App() {
   const [groupName, setGroupName] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [selectedFriendsForGroup, setSelectedFriendsForGroup] = useState([]);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [language, setLanguage] = useState(localStorage.getItem('language') || 'zh');
   const [showLanguageSelect, setShowLanguageSelect] = useState(false);
@@ -696,7 +697,7 @@ function App() {
         body: JSON.stringify({
           groupName,
           creator: username,
-          members: [username]
+          members: [username, ...selectedFriendsForGroup]
         })
       });
 
@@ -705,6 +706,7 @@ function App() {
       if (data.success) {
         setGroups([...groups, data.group]);
         setGroupName('');
+        setSelectedFriendsForGroup([]);
         setShowCreateGroup(false);
         alert('群组创建成功！');
       }
@@ -2229,7 +2231,11 @@ function App() {
       {showCreateGroup && (
         <div className="add-friend-page">
           <div className="add-friend-header">
-            <button className="back-btn" onClick={() => setShowCreateGroup(false)}>
+            <button className="back-btn" onClick={() => {
+              setShowCreateGroup(false);
+              setSelectedFriendsForGroup([]);
+              setGroupName('');
+            }}>
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
@@ -2249,11 +2255,52 @@ function App() {
                   className="search-input-friend"
                 />
               </div>
+            </div>
+
+            <div className="group-members-section">
+              <div className="group-members-title">选择成员</div>
+              <div className="group-members-count">
+                已选择 {selectedFriendsForGroup.length} 人
+              </div>
+            </div>
+
+            <div className="friends-select-list">
+              {friends.map(friend => (
+                <div 
+                  key={friend.username}
+                  className={`friend-select-item ${selectedFriendsForGroup.includes(friend.username) ? 'selected' : ''}`}
+                  onClick={() => {
+                    if (selectedFriendsForGroup.includes(friend.username)) {
+                      setSelectedFriendsForGroup(prev => prev.filter(f => f !== friend.username));
+                    } else {
+                      setSelectedFriendsForGroup(prev => [...prev, friend.username]);
+                    }
+                  }}
+                >
+                  <div className="friend-select-avatar">
+                    {getInitial(friend.username)}
+                  </div>
+                  <div className="friend-select-info">
+                    <div className="friend-select-name">{friend.username}</div>
+                  </div>
+                  {selectedFriendsForGroup.includes(friend.username) && (
+                    <div className="friend-select-check">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                      </svg>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="create-group-footer">
               <button 
-                className="search-btn"
+                className="create-group-btn"
                 onClick={createGroup}
+                disabled={!groupName.trim() || selectedFriendsForGroup.length === 0}
               >
-                创建
+                创建群组 ({selectedFriendsForGroup.length + 1}人)
               </button>
             </div>
           </div>
