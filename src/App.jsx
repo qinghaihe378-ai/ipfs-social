@@ -749,10 +749,10 @@ function App() {
       const data = await response.json();
       
       if (data.success) {
-        setGroups([...groups, data.group]);
         setGroupName('');
         setSelectedFriendsForGroup([]);
         setShowCreateGroup(false);
+        await loadGroups();
         alert('群组创建成功！');
       }
     } catch (error) {
