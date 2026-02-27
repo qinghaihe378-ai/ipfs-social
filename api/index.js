@@ -680,3 +680,7 @@ app.post('/api/tweet', async (req, res) => {
 });
 
 export default app;
+
+export const handler = async (req, res) => {
+  return app(req, res);
+};
