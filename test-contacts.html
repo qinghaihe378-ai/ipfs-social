@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试通讯录</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a1a; color: white; }
+        .test { margin: 10px 0; padding: 10px; background: #2a2a2a; border-radius: 5px; }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🧪 通讯录功能测试</h1>
+    
+    <div class="test">
+        <h3>1. 测试后端API</h3>
+        <button onclick="testBackendAPI()">测试后端</button>
+        <div id="backend-result"></div>
+    </div>
+    
+    <div class="test">
+        <h3>2. 测试好友API</h3>
+        <input type="text" id="username" placeholder="输入用户名" value="test_user">
+        <button onclick="testFriendsAPI()">获取好友列表</button>
+        <div id="friends-result"></div>
+    </div>
+    
+    <div class="test">
+        <h3>3. 测试群组API</h3>
+        <button onclick="testGroupsAPI()">获取群组列表</button>
+        <div id="groups-result"></div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:3001';
+        
+        async function testBackendAPI() {
+            const resultDiv = document.getElementById('backend-result');
+            try {
+                const response = await fetch(`${API_BASE}/api/health`);
+                const data = await response.json();
+                resultDiv.innerHTML = `<span class="success">✅ 后端运行正常: ${JSON.stringify(data)}</span>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 后端连接失败: ${error.message}</span>`;
+            }
+        }
+        
+        async function testFriendsAPI() {
+            const username = document.getElementById('username').value;
+            const resultDiv = document.getElementById('friends-result');
+            try {
+                const response = await fetch(`${API_BASE}/api/friends/${encodeURIComponent(username)}`);
+                const data = await response.json();
+                if (data.success && data.friends) {
+                    resultDiv.innerHTML = `<span class="success">✅ 找到 ${data.friends.length} 个好友:<br>${JSON.stringify(data.friends, null, 2)}</span>`;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ 没有好友</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 获取好友失败: ${error.message}</span>`;
+            }
+        }
+        
+        async function testGroupsAPI() {
+            const username = document.getElementById('username').value;
+            const resultDiv = document.getElementById('groups-result');
+            try {
+                const response = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(username)}`);
+                const data = await response.json();
+                if (data.success && data.groups) {
+                    resultDiv.innerHTML = `<span class="success">✅ 找到 ${data.groups.length} 个群组:<br>${JSON.stringify(data.groups, null, 2)}</span>`;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ 没有群组</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 获取群组失败: ${error.message}</span>`;
+            }
+        }
+        
+        // 自动测试
+        testBackendAPI();
+    </script>
+</body>
+</html>
