@@ -3,7 +3,6 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import { create } from 'ipfs-http-client';
 import { createClient } from '@supabase/supabase-js';
-import 'dotenv/config';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
