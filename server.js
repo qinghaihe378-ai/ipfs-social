@@ -375,11 +375,11 @@ app.post('/api/send-friend-request', async (req, res) => {
 
     const request = {
       id: Date.now().toString(),
-      from,
-      to,
+      from_user: from,
+      to_user: to,
       message: message || '',
       status: 'pending',
-      createdAt: Date.now()
+      created_at: Date.now()
     };
 
     // 存储好友申请
@@ -424,9 +424,9 @@ app.get('/api/friend-requests/:username', async (req, res) => {
       const { data, error } = await supabase
         .from('friend_requests')
         .select('*')
-        .eq('to', username)
+        .eq('to_user', username)
         .eq('status', 'pending')
-        .order('createdAt', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.warn('获取好友申请失败:', error.message);
@@ -465,7 +465,7 @@ app.post('/api/respond-friend-request', async (req, res) => {
         .from('friend_requests')
         .select('*')
         .eq('id', requestId)
-        .eq('to', username)
+        .eq('to_user', username)
         .single();
 
       if (error || !data) {
@@ -499,39 +499,37 @@ app.post('/api/respond-friend-request', async (req, res) => {
           await supabase
             .from('friends')
             .insert([
-              { user1: request.from, user2: request.to, status: 'active', createdAt: Date.now() },
-              { user1: request.to, user2: request.from, status: 'active', createdAt: Date.now() }
+              { user1: request.from_user, user2: request.to_user },
+              { user1: request.to_user, user2: request.from_user }
             ]);
         } catch (dbError) {
           console.warn('创建好友关系失败:', dbError.message);
         }
       } else {
         // 使用内存存储好友关系
-        const user1Friends = friends.get(request.from) || [];
-        const user2Friends = friends.get(request.to) || [];
+        const user1Friends = friends.get(request.from_user) || [];
+        const user2Friends = friends.get(request.to_user) || [];
         
         user1Friends.push({
-          user1: request.from,
-          user2: request.to,
-          status: 'active',
+          user1: request.from_user,
+          user2: request.to_user,
           createdAt: Date.now()
         });
         
         user2Friends.push({
-          user1: request.to,
-          user2: request.from,
-          status: 'active',
+          user1: request.to_user,
+          user2: request.from_user,
           createdAt: Date.now()
         });
         
-        friends.set(request.from, user1Friends);
-        friends.set(request.to, user2Friends);
+        friends.set(request.from_user, user1Friends);
+        friends.set(request.to_user, user2Friends);
       }
     }
 
     let newFriends = [];
     if (action === 'accept') {
-      newFriends = [request.from];
+      newFriends = [request.from_user];
     }
 
     res.json({ 
@@ -590,26 +588,23 @@ app.get('/api/friends/:username', async (req, res) => {
       const { data, error } = await supabase
         .from('friends')
         .select('*')
-        .eq('user1', username)
-        .eq('status', 'active');
+        .eq('user1', username);
 
       if (error) {
         console.warn('获取好友列表失败:', error.message);
       } else {
         friendsList = data.map(f => ({
           username: f.user2,
-          addedAt: f.createdAt
+          addedAt: f.added_at
         }));
       }
     } else {
       // 从内存中获取
       const userFriends = friends.get(username) || [];
-      friendsList = userFriends
-        .filter(f => f.status === 'active')
-        .map(f => ({
-          username: f.user2,
-          addedAt: f.createdAt
-        }));
+      friendsList = userFriends.map(f => ({
+        username: f.user2,
+        addedAt: f.createdAt
+      }));
     }
 
     res.json({ 
