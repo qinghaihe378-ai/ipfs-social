@@ -61,6 +61,7 @@ function App() {
     loadTweets();
     loadFriends();
     loadMessages();
+    loadGroupsFromStorage();
     const cleanup = subscribeToTweets();
     return cleanup;
   }, []);
@@ -568,16 +569,32 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(username)}`);
       const data = await response.json();
+      console.log('加载群组数据:', data);
       if (data.success && data.groups) {
         const savedAvatars = JSON.parse(localStorage.getItem('groupAvatars') || '{}');
         const groupsWithAvatars = data.groups.map(g => ({
           ...g,
           avatar: savedAvatars[g.id] || g.avatar || null
         }));
+        console.log('设置群组:', groupsWithAvatars);
         setGroups(groupsWithAvatars);
+        localStorage.setItem('groups', JSON.stringify(groupsWithAvatars));
+      } else {
+        console.log('群组数据为空或失败:', data);
       }
     } catch (error) {
       console.error('加载群组失败:', error);
+      const savedGroups = localStorage.getItem('groups');
+      if (savedGroups) {
+        setGroups(JSON.parse(savedGroups));
+      }
+    }
+  };
+
+  const loadGroupsFromStorage = () => {
+    const savedGroups = localStorage.getItem('groups');
+    if (savedGroups) {
+      setGroups(JSON.parse(savedGroups));
     }
   };
 
