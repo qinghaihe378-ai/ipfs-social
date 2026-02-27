@@ -32,7 +32,6 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [groups, setGroups] = useState([]);
   
   useEffect(() => {
@@ -181,102 +180,7 @@ function App() {
     return keyPair;
   };
 
-  const login = async () => {
-    if (!username) {
-      alert('请输入用户名');
-      return;
-    }
 
-    try {
-      setLoading(true);
-
-      let savedPublicKey = localStorage.getItem('publicKey');
-      
-      // 如果本地没有存储，尝试从服务器获取用户信息
-      if (!savedPublicKey) {
-        const response = await fetch(`${API_BASE}/api/profile?username=${encodeURIComponent(username)}`);
-        const data = await response.json();
-        
-        if (data.success && data.users && data.users.length > 0) {
-          const user = data.users[0];
-          
-          if (user && user.public_key) {
-            // 找到用户，更新本地存储
-            savedPublicKey = user.public_key;
-            localStorage.setItem('publicKey', savedPublicKey);
-            localStorage.setItem('username', username);
-            setPublicKey(savedPublicKey);
-          } else {
-            alert('用户不存在，请重新注册');
-            setLoading(false);
-            return;
-          }
-        } else {
-          alert('用户不存在，请重新注册');
-          setLoading(false);
-          return;
-        }
-      }
-
-      setIsLoggedIn(true);
-    } catch (error) {
-      console.error('登录失败:', error);
-      alert('登录失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const register = async () => {
-    if (!username) {
-      alert('请输入用户名');
-      return;
-    }
-
-    if (username.length < 3) {
-      alert('用户名至少需要3个字符');
-      return;
-    }
-
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      alert('用户名只能包含字母、数字和下划线');
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const keyPair = generateKeyPair();
-      
-      const response = await fetch(`${API_BASE}/api/profile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          bio: '欢迎使用 Mutual',
-          avatar: '',
-          publicKey: keyPair.publicKey
-        })
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setProfileCid(data.cid);
-        setPublicKey(keyPair.publicKey);
-        localStorage.setItem('profileCid', data.cid);
-        localStorage.setItem('username', username);
-        localStorage.setItem('publicKey', keyPair.publicKey);
-        setIsLoggedIn(true);
-      } else if (data.code === 'USERNAME_EXISTS') {
-        alert('该用户名已被注册，请选择其他用户名');
-      }
-    } catch (error) {
-      console.error('注册失败:', error);
-      alert('注册失败');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const walletLogin = async () => {
     try {
@@ -1064,55 +968,6 @@ function App() {
             </div>
             
             <div className="login-form">
-              <div className="login-input-group">
-                <input
-                  type="text"
-                  className="login-input"
-                  placeholder="请输入用户名"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && (isRegisterMode ? register() : login())}
-                />
-              </div>
-              
-              {isRegisterMode ? (
-                <>
-                  <button 
-                    className="login-button"
-                    onClick={register}
-                    disabled={loading}
-                  >
-                    {loading ? '注册中...' : '注册'}
-                  </button>
-                  <div className="login-switch">
-                    <span>已有账号？</span>
-                    <button className="switch-btn" onClick={() => setIsRegisterMode(false)}>
-                      立即登录
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <button 
-                    className="login-button"
-                    onClick={login}
-                    disabled={loading}
-                  >
-                    {loading ? '登录中...' : '登录'}
-                  </button>
-                  <div className="login-switch">
-                    <span>没有账号？</span>
-                    <button className="switch-btn" onClick={() => setIsRegisterMode(true)}>
-                      立即注册
-                    </button>
-                  </div>
-                </>
-              )}
-              
-              <div className="login-divider">
-                <span>或</span>
-              </div>
-              
               <button 
                 className="login-button wallet-login-btn"
                 onClick={walletLogin}
