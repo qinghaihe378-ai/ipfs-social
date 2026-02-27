@@ -35,6 +35,8 @@ function App() {
   const [groups, setGroups] = useState([]);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [language, setLanguage] = useState(localStorage.getItem('language') || 'zh');
   const [showLanguageSelect, setShowLanguageSelect] = useState(false);
@@ -64,7 +66,8 @@ function App() {
       broadcastOnline();
       loadOfflineMessages();
       subscribeToMessages();
-      syncFriendsFromServer(); // 登录后立即同步好友列表
+      syncFriendsFromServer();
+      loadGroups();
     }
   }, [isLoggedIn, username]);
 
@@ -552,6 +555,18 @@ function App() {
     }
   };
 
+  const loadGroups = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(username)}`);
+      const data = await response.json();
+      if (data.success && data.groups) {
+        setGroups(data.groups);
+      }
+    } catch (error) {
+      console.error('加载群组失败:', error);
+    }
+  };
+
   // 表情包数据
   const emojis = [
     '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
@@ -596,6 +611,14 @@ function App() {
     if (!content.trim() || !username || !toUser) return;
 
     try {
+      const isGroupMessage = toUser.startsWith('group:');
+      const groupId = isGroupMessage ? toUser.replace('group:', '') : null;
+
+      if (isGroupMessage) {
+        await sendGroupMessage(content, groupId);
+        return;
+      }
+
       const newMessage = {
         id: Date.now().toString(),
         from: username,
@@ -644,10 +667,19 @@ function App() {
     localStorage.setItem('messages', JSON.stringify(updatedMessages));
   };
 
-  const getChatMessages = (friendUsername) => {
+  const getChatMessages = (chatId) => {
+    const isGroup = chatId.startsWith('group:');
+    
+    if (isGroup) {
+      const groupId = chatId.replace('group:', '');
+      return messages.filter(
+        msg => msg.groupId === groupId || msg.to === `group:${groupId}`
+      ).sort((a, b) => a.timestamp - b.timestamp);
+    }
+    
     return messages.filter(
-      msg => (msg.from === username && msg.to === friendUsername) ||
-             (msg.from === friendUsername && msg.to === username)
+      msg => (msg.from === username && msg.to === chatId) ||
+             (msg.from === chatId && msg.to === username)
     ).sort((a, b) => a.timestamp - b.timestamp);
   };
 
@@ -707,6 +739,31 @@ function App() {
     } catch (error) {
       console.error('发送群消息失败:', error);
       alert('发送群消息失败');
+    }
+  };
+
+  const inviteToGroup = async (friendUsername, groupId) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/join-group`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupId,
+          username: friendUsername
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`已邀请 ${friendUsername} 加入群组`);
+        loadGroups();
+      } else {
+        alert(data.error || '邀请失败');
+      }
+    } catch (error) {
+      console.error('邀请加入群组失败:', error);
+      alert('邀请加入群组失败');
     }
   };
 
@@ -1002,37 +1059,43 @@ function App() {
                   </div>
                   
                   <div className="chat-messages">
-                    {getChatMessages(selectedChat).map(msg => (
-                      <div 
-                        key={msg.id} 
-                        className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          if (confirm('确定要删除这条消息吗？')) {
-                            deleteMessage(msg.id);
-                          }
-                        }}
-                      >
-                        {msg.from !== username && (
-                          <div className="message-avatar">
-                            {getInitial(msg.from)}
+                    {getChatMessages(selectedChat).map(msg => {
+                      const isGroup = selectedChat.startsWith('group:');
+                      return (
+                        <div 
+                          key={msg.id} 
+                          className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            if (confirm('确定要删除这条消息吗？')) {
+                              deleteMessage(msg.id);
+                            }
+                          }}
+                        >
+                          {msg.from !== username && (
+                            <div className="message-avatar">
+                              {getInitial(msg.from)}
+                            </div>
+                          )}
+                          <div className="message-wrapper">
+                            {isGroup && msg.from !== username && (
+                              <div className="message-sender">{msg.from}</div>
+                            )}
+                            <div className="message-content">
+                              {msg.content}
+                            </div>
+                            <div className="message-time">
+                              {formatDate(msg.timestamp)}
+                            </div>
                           </div>
-                        )}
-                        <div className="message-wrapper">
-                          <div className="message-content">
-                            {msg.content}
-                          </div>
-                          <div className="message-time">
-                            {formatDate(msg.timestamp)}
-                          </div>
+                          {msg.from === username && (
+                            <div className="message-avatar">
+                              {getInitial(msg.from)}
+                            </div>
+                          )}
                         </div>
-                        {msg.from === username && (
-                          <div className="message-avatar">
-                            {getInitial(msg.from)}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   
                   <div className="chat-input">
@@ -1136,7 +1199,7 @@ function App() {
                     )}
                   </div>
                 </div>
-                <div className="contact-item" onClick={() => {}}>
+                <div className="contact-item" onClick={() => setShowCreateGroup(true)}>
                   <div className="contact-icon green">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                       <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
@@ -1146,6 +1209,30 @@ function App() {
                     <div className="contact-name">群聊</div>
                   </div>
                 </div>
+                
+                {groups.length > 0 && (
+                  <>
+                    {groups.map(group => (
+                      <div 
+                        key={group.id} 
+                        className="contact-item"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedGroup(group);
+                          setShowGroupInfo(true);
+                        }}
+                      >
+                        <div className="contact-avatar">
+                          {getInitial(group.name)}
+                        </div>
+                        <div className="contact-info">
+                          <div className="contact-name">{group.name}</div>
+                          <div className="contact-subtitle">{group.members.length} 成员</div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
                 
                 {friends.length > 0 && (
                   <>
@@ -1298,37 +1385,43 @@ function App() {
                   </div>
                   
                   <div className="chat-messages">
-                    {getChatMessages(selectedChat).map(msg => (
-                      <div 
-                        key={msg.id} 
-                        className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          if (confirm('确定要删除这条消息吗？')) {
-                            deleteMessage(msg.id);
-                          }
-                        }}
-                      >
-                        {msg.from !== username && (
-                          <div className="message-avatar">
-                            {getInitial(msg.from)}
+                    {getChatMessages(selectedChat).map(msg => {
+                      const isGroup = selectedChat.startsWith('group:');
+                      return (
+                        <div 
+                          key={msg.id} 
+                          className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            if (confirm('确定要删除这条消息吗？')) {
+                              deleteMessage(msg.id);
+                            }
+                          }}
+                        >
+                          {msg.from !== username && (
+                            <div className="message-avatar">
+                              {getInitial(msg.from)}
+                            </div>
+                          )}
+                          <div className="message-wrapper">
+                            {isGroup && msg.from !== username && (
+                              <div className="message-sender">{msg.from}</div>
+                            )}
+                            <div className="message-content">
+                              {msg.content}
+                            </div>
+                            <div className="message-time">
+                              {formatDate(msg.timestamp)}
+                            </div>
                           </div>
-                        )}
-                        <div className="message-wrapper">
-                          <div className="message-content">
-                            {msg.content}
-                          </div>
-                          <div className="message-time">
-                            {formatDate(msg.timestamp)}
-                          </div>
+                          {msg.from === username && (
+                            <div className="message-avatar">
+                              {getInitial(msg.from)}
+                            </div>
+                          )}
                         </div>
-                        {msg.from === username && (
-                          <div className="message-avatar">
-                            {getInitial(msg.from)}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   
                   <div className="chat-input">
@@ -1787,6 +1880,27 @@ function App() {
                 发消息
               </button>
               <button 
+                className="friend-action-btn success"
+                onClick={() => {
+                  if (groups.length === 0) {
+                    alert('请先创建群组');
+                    return;
+                  }
+                  const groupName = prompt(`选择要邀请 ${selectedFriend.username} 加入的群组:\n${groups.map(g => g.name).join('\n')}`);
+                  if (groupName) {
+                    const group = groups.find(g => g.name === groupName);
+                    if (group) {
+                      inviteToGroup(selectedFriend.username, group.id);
+                    }
+                  }
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                </svg>
+                邀请加入群组
+              </button>
+              <button 
                 className="friend-action-btn danger"
                 onClick={() => {
                   if (confirm(`确定要删除好友 ${selectedFriend.username} 吗？`)) {
@@ -1800,6 +1914,78 @@ function App() {
                   <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                 </svg>
                 删除好友
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 群组信息页面 */}
+      {showGroupInfo && selectedGroup && (
+        <div className="friend-profile-page">
+          <div className="friend-profile-header">
+            <button className="back-btn" onClick={() => {
+              setShowGroupInfo(false);
+              setSelectedGroup(null);
+            }}>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+              </svg>
+            </button>
+            <div className="friend-profile-title">群组信息</div>
+            <div className="header-placeholder"></div>
+          </div>
+
+          <div className="friend-profile-content">
+            <div className="friend-profile-card">
+              <div className="friend-profile-avatar">
+                {getInitial(selectedGroup.name)}
+              </div>
+              <div className="friend-profile-info">
+                <div className="friend-profile-name">{selectedGroup.name}</div>
+                <div className="friend-profile-id">{selectedGroup.members.length} 成员</div>
+              </div>
+            </div>
+
+            <div className="friend-profile-section">
+              <div className="friend-profile-item">
+                <div className="friend-item-label">创建者</div>
+                <div className="friend-item-value">{selectedGroup.creator}</div>
+              </div>
+              <div className="friend-profile-item">
+                <div className="friend-item-label">创建时间</div>
+                <div className="friend-item-value">{new Date(selectedGroup.createdAt).toLocaleDateString()}</div>
+              </div>
+            </div>
+
+            <div className="friend-profile-section">
+              <div className="friend-item-label">群组成员</div>
+              {selectedGroup.members.map(member => (
+                <div key={member} className="group-member-item">
+                  <div className="group-member-avatar">
+                    {getInitial(member)}
+                  </div>
+                  <div className="group-member-name">{member}</div>
+                  {member === selectedGroup.creator && (
+                    <div className="group-member-badge">群主</div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="friend-profile-actions">
+              <button 
+                className="friend-action-btn primary"
+                onClick={() => {
+                  setSelectedChat(`group:${selectedGroup.id}`);
+                  setShowGroupInfo(false);
+                  setActiveTab('messages');
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                </svg>
+                进入群聊
               </button>
             </div>
           </div>
@@ -2014,6 +2200,41 @@ function App() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 创建群组页面 */}
+      {showCreateGroup && (
+        <div className="add-friend-page">
+          <div className="add-friend-header">
+            <button className="back-btn" onClick={() => setShowCreateGroup(false)}>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+              </svg>
+            </button>
+            <div className="add-friend-title">创建群组</div>
+            <div className="header-placeholder"></div>
+          </div>
+
+          <div className="add-friend-content">
+            <div className="search-section">
+              <div className="search-box">
+                <input
+                  type="text"
+                  placeholder="群组名称"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  className="search-input-friend"
+                />
+              </div>
+              <button 
+                className="search-btn"
+                onClick={createGroup}
+              >
+                创建
+              </button>
+            </div>
           </div>
         </div>
       )}
