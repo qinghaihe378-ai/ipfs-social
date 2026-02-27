@@ -385,11 +385,17 @@ app.post('/api/send-friend-request', async (req, res) => {
     // 存储好友申请
     if (supabase) {
       try {
-        await supabase
+        const { error: insertError } = await supabase
           .from('friend_requests')
           .insert(request);
+        
+        if (insertError) {
+          console.error('数据库存储好友申请失败:', insertError.message);
+          throw new Error('数据库存储失败: ' + insertError.message);
+        }
       } catch (dbError) {
-        console.warn('数据库存储好友申请失败:', dbError.message);
+        console.error('数据库存储好友申请失败:', dbError.message);
+        throw dbError;
       }
     }
 
