@@ -4,7 +4,7 @@
     "outputDirectory": "."
   },
   "start": {
-    "command": "node server.js",
+    "command": "node test-server.js",
     "env": {
       "NODE_ENV": "production"
     }
