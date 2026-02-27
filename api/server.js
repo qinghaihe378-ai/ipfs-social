@@ -630,10 +630,6 @@ app.get('/api/subscribe', async (req, res) => {
   }
 });
 
-// 启动服务器
-initIPFS().finally(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`服务器运行在 http://localhost:${PORT}`);
-    console.log(`手机访问地址: http://<您的电脑IP>:${PORT}`);
-  });
-});
+initIPFS().catch(console.error);
+
+export default app;

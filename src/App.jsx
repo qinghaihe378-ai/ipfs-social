@@ -3,7 +3,7 @@ import './App.css';
 import Wallet from './components/Wallet';
 import Bot from './components/Bot';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
 
 function App() {
   const [tweets, setTweets] = useState([]);
