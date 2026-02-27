@@ -639,17 +639,26 @@ app.post('/api/create-group', async (req, res) => {
         const { data: savedGroup, error: dbError } = await supabase
           .from('groups')
           .insert({
-            id: group.id,
-            name: group.name,
-            creator: group.creator,
-            members: group.members,
-            createdAt: group.createdAt
+            id: parseInt(groupId),
+            group_id: groupId,
+            name: groupName,
+            creator: creator
           })
           .select()
           .single();
 
         if (dbError) {
           console.warn('数据库存储群组失败:', dbError.message);
+        } else {
+          const membersList = members || [creator];
+          for (const member of membersList) {
+            await supabase
+              .from('group_members')
+              .insert({
+                group_id: groupId,
+                username: member
+              });
+          }
         }
       } catch (dbError) {
         console.warn('数据库错误:', dbError.message);
@@ -690,11 +699,13 @@ app.post('/api/join-group', async (req, res) => {
     if (supabase) {
       try {
         await supabase
-          .from('groups')
-          .update({ members: group.members })
-          .eq('id', groupId);
+          .from('group_members')
+          .insert({
+            group_id: groupId,
+            username: username
+          });
       } catch (dbError) {
-        console.warn('数据库更新群组失败:', dbError.message);
+        console.warn('数据库添加群组成员失败:', dbError.message);
       }
     }
     
@@ -715,15 +726,28 @@ app.get('/api/groups/:username', async (req, res) => {
     let groupsList = [];
 
     if (supabase) {
-      const { data: dbGroups, error } = await supabase
-        .from('groups')
-        .select('*')
-        .contains('members', [username]);
+      const { data: userGroups, error: groupsError } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('username', username);
 
-      if (error) {
-        console.warn('获取群组失败:', error.message);
+      if (groupsError) {
+        console.warn('获取用户群组失败:', groupsError.message);
       } else {
-        groupsList = dbGroups || [];
+        const groupIds = (userGroups || []).map(g => g.group_id);
+        
+        if (groupIds.length > 0) {
+          const { data: dbGroups, error } = await supabase
+            .from('groups')
+            .select('*')
+            .in('group_id', groupIds);
+
+          if (error) {
+            console.warn('获取群组失败:', error.message);
+          } else {
+            groupsList = dbGroups || [];
+          }
+        }
       }
     }
 
@@ -776,8 +800,7 @@ app.post('/api/send-group-message', async (req, res) => {
             to_user: `group:${groupId}`,
             content: message.content,
             timestamp: message.timestamp,
-            type: 'group',
-            groupId: message.groupId
+            type: 'group'
           })
           .select()
           .single();
@@ -810,7 +833,7 @@ app.get('/api/group-messages/:groupId', async (req, res) => {
       const { data: dbMessages, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('groupId', groupId)
+        .eq('to_user', `group:${groupId}`)
         .order('timestamp', { ascending: true });
 
       if (error) {
