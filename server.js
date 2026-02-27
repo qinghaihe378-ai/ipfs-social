@@ -238,11 +238,31 @@ app.get('/api/subscribe-messages/:username', async (req, res) => {
       }
 
       if (supabase) {
-        const { data: msgData } = await supabase
+        // 获取用户所在的所有群组
+        const { data: userGroups } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('username', username);
+        
+        const groupIds = (userGroups || []).map(g => `group:${g.group_id}`);
+        
+        // 查询私聊消息
+        const { data: privateMsgs } = await supabase
           .from('messages')
           .select('id')
           .eq('to_user', username);
-        newMessages = msgData || [];
+        
+        // 查询群消息
+        let groupMsgs = [];
+        if (groupIds.length > 0) {
+          const { data } = await supabase
+            .from('messages')
+            .select('id')
+            .in('to_user', groupIds);
+          groupMsgs = data || [];
+        }
+        
+        newMessages = [...(privateMsgs || []), ...groupMsgs];
       } else {
         newMessages = messages.get(username) || [];
       }

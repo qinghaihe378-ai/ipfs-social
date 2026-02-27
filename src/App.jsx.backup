@@ -1261,15 +1261,21 @@ function App() {
                           <div 
                             key={friend.username} 
                             className="contact-item"
-                            onClick={() => {
-                              setSelectedFriend(friend);
-                              setShowFriendProfile(true);
-                            }}
                           >
-                            <div className="contact-avatar">
+                            <div 
+                              className="contact-avatar"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedFriend(friend);
+                                setShowFriendProfile(true);
+                              }}
+                            >
                               {getInitial(friend.username)}
                             </div>
-                            <div className="contact-info">
+                            <div 
+                              className="contact-info"
+                              onClick={() => { setSelectedChat(friend.username); setActiveTab('messages'); }}
+                            >
                               <div className="contact-name">{friend.username}</div>
                             </div>
                           </div>
