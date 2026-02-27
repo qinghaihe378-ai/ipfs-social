@@ -284,9 +284,20 @@ function App() {
     
     eventSource.onmessage = (event) => {
       try {
-        const tweet = JSON.parse(event.data);
-        if (!tweet.error) {
-          setTweets(prev => [tweet, ...prev]);
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'ping') {
+          return;
+        }
+        
+        if (data.content && data.username) {
+          setTweets(prev => {
+            const exists = prev.some(t => t.id === data.id);
+            if (!exists) {
+              return [data, ...prev];
+            }
+            return prev;
+          });
         }
       } catch (error) {
         console.error('解析推文失败:', error);
