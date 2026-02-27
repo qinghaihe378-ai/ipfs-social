@@ -862,7 +862,7 @@ function App() {
       const data = await response.json();
       
       if (data.success) {
-        setGroups(groups.map(g => g.id === groupId ? data.group : g));
+        setGroups(prevGroups => prevGroups.map(g => g.id === groupId ? data.group : g));
         setSelectedGroup(data.group);
         setEditingGroupName(false);
         alert('群名称修改成功！');
@@ -888,11 +888,14 @@ function App() {
         savedAvatars[groupId] = avatarUrl;
         localStorage.setItem('groupAvatars', JSON.stringify(savedAvatars));
         
-        const updatedGroups = groups.map(g => 
-          g.id === groupId ? { ...g, avatar: avatarUrl } : g
-        );
-        setGroups(updatedGroups);
-        setSelectedGroup({ ...selectedGroup, avatar: avatarUrl });
+        setGroups(prevGroups => {
+          const updatedGroups = prevGroups.map(g => 
+            g.id === groupId ? { ...g, avatar: avatarUrl } : g
+          );
+          localStorage.setItem('groups', JSON.stringify(updatedGroups));
+          return updatedGroups;
+        });
+        setSelectedGroup(prev => ({ ...prev, avatar: avatarUrl }));
         alert('群头像设置成功！');
         setUploadingGroupAvatar(false);
       };
