@@ -570,7 +570,7 @@ function App() {
       const response = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(username)}`);
       const data = await response.json();
       console.log('加载群组数据:', data);
-      if (data.success && data.groups) {
+      if (data.success && data.groups && data.groups.length > 0) {
         const savedAvatars = JSON.parse(localStorage.getItem('groupAvatars') || '{}');
         const groupsWithAvatars = data.groups.map(g => ({
           ...g,
@@ -579,6 +579,16 @@ function App() {
         console.log('设置群组:', groupsWithAvatars);
         setGroups(groupsWithAvatars);
         localStorage.setItem('groups', JSON.stringify(groupsWithAvatars));
+      } else if (data.success && data.groups && data.groups.length === 0) {
+        console.log('API返回空群组，保留本地数据');
+        const savedGroups = localStorage.getItem('groups');
+        if (savedGroups) {
+          const localGroups = JSON.parse(savedGroups);
+          if (localGroups.length > 0) {
+            console.log('使用本地缓存的群组:', localGroups);
+            setGroups(localGroups);
+          }
+        }
       } else {
         console.log('群组数据为空或失败:', data);
       }
@@ -766,10 +776,20 @@ function App() {
       const data = await response.json();
       
       if (data.success) {
+        const newGroup = data.group;
+        const savedAvatars = JSON.parse(localStorage.getItem('groupAvatars') || '{}');
+        const groupWithAvatar = {
+          ...newGroup,
+          avatar: savedAvatars[newGroup.id] || null
+        };
+        
+        const updatedGroups = [...groups, groupWithAvatar];
+        setGroups(updatedGroups);
+        localStorage.setItem('groups', JSON.stringify(updatedGroups));
+        
         setGroupName('');
         setSelectedFriendsForGroup([]);
         setShowCreateGroup(false);
-        await loadGroups();
         alert('群组创建成功！');
       }
     } catch (error) {
