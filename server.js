@@ -3,17 +3,16 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import { create } from 'ipfs-http-client';
 import { createClient } from '@supabase/supabase-js';
-import 'dotenv/config';
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(bodyParser.json());
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 let ipfs;
 const onlineUsers = new Map();
@@ -24,8 +23,8 @@ const tweets = [];
 async function initIPFS() {
   try {
     ipfs = await create({ 
-      url: 'http://localhost:5001/api/v0',
-      timeout: 30000
+      url: process.env.IPFS_URL || 'http://localhost:5001/api/v0',
+      timeout: 10000
     });
     console.log('IPFS 节点已连接');
     
@@ -36,14 +35,20 @@ async function initIPFS() {
       console.warn('无法获取节点 ID，但连接已建立:', idError.message);
     }
   } catch (error) {
-    console.error('连接 IPFS 失败:', error.message);
-    console.log('提示: 请确保 IPFS 节点正在运行 (ipfs daemon)');
-    console.log('服务器将继续运行，但部分功能可能不可用');
+    console.warn('连接 IPFS 失败 (非关键):', error.message);
+    ipfs = null;
   }
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', ipfsConnected: !!ipfs });
+  res.json({ 
+    status: 'ok', 
+    ipfsConnected: !!ipfs,
+    env: {
+      supabaseUrl: process.env.SUPABASE_URL ? 'set' : 'not set',
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY ? 'set' : 'not set'
+    }
+  });
 });
 
 app.post('/api/check-username', async (req, res) => {
@@ -54,6 +59,10 @@ app.post('/api/check-username', async (req, res) => {
   }
 
   try {
+    if (!supabase) {
+      return res.json({ exists: false, username });
+    }
+    
     const { data: existingUser, error } = await supabase
       .from('users')
       .select('id')
@@ -81,18 +90,6 @@ app.post('/api/user-online', async (req, res) => {
     online: true
   });
 
-  if (ipfs) {
-    try {
-      await ipfs.pubsub.publish('user-presence', JSON.stringify({
-        type: 'online',
-        username,
-        timestamp: Date.now()
-      }));
-    } catch (error) {
-      console.warn('广播在线状态失败:', error.message);
-    }
-  }
-
   res.json({ success: true, username });
 });
 
@@ -105,6 +102,15 @@ app.post('/api/check-user-online', async (req, res) => {
 
   // 检查用户是否存在于数据库中
   try {
+    if (!supabase) {
+      return res.json({ 
+        online: false, 
+        exists: false,
+        username,
+        lastSeen: null
+      });
+    }
+    
     const { data: existingUser, error } = await supabase
       .from('users')
       .select('id')
@@ -143,6 +149,7 @@ app.post('/api/send-message', async (req, res) => {
     }
 
     const message = {
+      id: Date.now().toString(),
       from_user: from,
       to_user: to,
       content,
@@ -151,31 +158,28 @@ app.post('/api/send-message', async (req, res) => {
       read: false
     };
 
-    const { data: savedMessage, error: dbError } = await supabase
-      .from('messages')
-      .insert(message)
-      .select()
-      .single();
+    if (supabase) {
+      try {
+        const { data: savedMessage, error: dbError } = await supabase
+          .from('messages')
+          .insert(message)
+          .select()
+          .single();
 
-    if (dbError) {
-      throw dbError;
+        if (dbError) {
+          console.warn('数据库存储失败:', dbError.message);
+        }
+      } catch (dbError) {
+        console.warn('数据库错误:', dbError.message);
+      }
     }
 
     const recipient = onlineUsers.get(to);
     const isOnline = recipient && (Date.now() - recipient.lastSeen) < 60000;
 
-    if (ipfs && isOnline) {
-      try {
-        const topic = `chat-${to}`;
-        await ipfs.pubsub.publish(topic, JSON.stringify(savedMessage));
-      } catch (error) {
-        console.warn('发送消息失败:', error.message);
-      }
-    }
-
     res.json({ 
       success: true, 
-      message: savedMessage,
+      message,
       delivered: isOnline
     });
   } catch (error) {
@@ -191,33 +195,32 @@ app.get('/api/subscribe-messages/:username', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  const topic = `chat-${username}`;
-  
-  if (ipfs) {
+  // 定期发送 ping 以保持连接
+  const interval = setInterval(() => {
     try {
-      await ipfs.pubsub.subscribe(topic, (msg) => {
-        const message = JSON.parse(msg.data.toString());
-        res.write(`data: ${JSON.stringify(message)}\n\n`);
-      });
-
-      req.on('close', () => {
-        if (ipfs) {
-          ipfs.pubsub.unsubscribe(topic);
-        }
-      });
+      res.write('data: {"type": "ping"}\n\n');
     } catch (error) {
-      console.error('订阅消息错误:', error);
-      res.status(500).json({ error: error.message });
+      clearInterval(interval);
     }
-  } else {
-    res.status(503).json({ error: 'IPFS 未连接' });
-  }
+  }, 30000);
+
+  req.on('close', () => {
+    clearInterval(interval);
+  });
 });
 
 app.get('/api/offline-messages/:username', async (req, res) => {
   const { username } = req.params;
   
   try {
+    if (!supabase) {
+      return res.json({ 
+        success: true, 
+        messages: [],
+        count: 0
+      });
+    }
+    
     const { data: messages, error } = await supabase
       .from('messages')
       .select('*')
@@ -225,7 +228,12 @@ app.get('/api/offline-messages/:username', async (req, res) => {
       .order('timestamp', { ascending: true });
 
     if (error) {
-      throw error;
+      console.warn('获取离线消息失败:', error.message);
+      return res.json({ 
+        success: true, 
+        messages: [],
+        count: 0
+      });
     }
     
     res.json({ 
@@ -339,19 +347,6 @@ app.post('/api/send-group-message', async (req, res) => {
       type: 'group'
     };
 
-    if (ipfs) {
-      for (const member of group.members) {
-        if (member !== from) {
-          try {
-            const topic = `chat-${member}`;
-            await ipfs.pubsub.publish(topic, JSON.stringify(message));
-          } catch (error) {
-            console.warn('发送群消息失败:', error.message);
-          }
-        }
-      }
-    }
-
     res.json({ 
       success: true, 
       message 
@@ -397,53 +392,12 @@ app.post('/api/upload-file', async (req, res) => {
     const recipient = onlineUsers.get(to);
     const isOnline = recipient && (Date.now() - recipient.lastSeen) < 60000;
 
-    if (ipfs && isOnline) {
-      try {
-        const topic = `chat-${to}`;
-        await ipfs.pubsub.publish(topic, JSON.stringify(message));
-      } catch (error) {
-        console.warn('发送文件消息失败:', error.message);
-      }
-    } else {
-      if (!offlineMessages.has(to)) {
-        offlineMessages.set(to, []);
-      }
-      offlineMessages.get(to).push(message);
-    }
-
     res.json({ 
       success: true, 
       message
     });
   } catch (error) {
     console.error('上传文件错误:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/download-file/:cid', async (req, res) => {
-  const { cid } = req.params;
-  
-  if (!ipfs) {
-    return res.status(503).json({ error: 'IPFS 未连接' });
-  }
-
-  try {
-    const chunks = [];
-    for await (const chunk of ipfs.cat(cid)) {
-      chunks.push(chunk);
-    }
-    
-    const fileBuffer = Buffer.concat(chunks);
-    const base64 = fileBuffer.toString('base64');
-    
-    res.json({ 
-      success: true, 
-      fileData: base64,
-      size: fileBuffer.length
-    });
-  } catch (error) {
-    console.error('下载文件错误:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -466,17 +420,6 @@ app.post('/api/tweet', async (req, res) => {
 
     tweets.unshift(tweet);
 
-    if (ipfs) {
-      try {
-        const tweetJSON = JSON.stringify(tweet);
-        const topic = 'social-tweets';
-        await ipfs.pubsub.publish(topic, Buffer.from(tweetJSON));
-        console.log('推文已通过 PubSub 广播');
-      } catch (pubsubError) {
-        console.warn('PubSub 广播失败:', pubsubError.message);
-      }
-    }
-
     res.json({ 
       success: true, 
       tweet 
@@ -491,29 +434,12 @@ app.get('/api/tweets', (req, res) => {
   res.json({ tweets });
 });
 
-app.get('/api/tweet/:cid', async (req, res) => {
-  if (!ipfs) {
-    return res.status(503).json({ error: 'IPFS 未连接' });
-  }
-
-  try {
-    const { cid } = req.params;
-    const chunks = [];
-    
-    for await (const chunk of ipfs.cat(cid)) {
-      chunks.push(chunk);
-    }
-    
-    const tweet = JSON.parse(Buffer.concat(chunks).toString());
-    res.json({ success: true, tweet });
-  } catch (error) {
-    console.error('获取推文错误:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 app.post('/api/profile', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase 未配置' });
+    }
+    
     const { username, bio, avatar, publicKey } = req.body;
     
     if (!username || !publicKey) {
@@ -550,9 +476,24 @@ app.post('/api/profile', async (req, res) => {
       throw createError;
     }
 
+    let cid = null;
+    if (ipfs) {
+      try {
+        const userData = JSON.stringify(user);
+        const result = await ipfs.add(userData);
+        cid = result.cid.toString();
+        console.log('用户资料已上传到 IPFS:', cid);
+      } catch (ipfsError) {
+        console.warn('IPFS 上传失败:', ipfsError.message);
+        cid = `ipfs-user-${username}-${Date.now()}`;
+      }
+    } else {
+      cid = `ipfs-user-${username}-${Date.now()}`;
+    }
+
     res.json({ 
       success: true, 
-      cid: `ipfs-user-${username}-${Date.now()}`,
+      cid,
       profile: user 
     });
   } catch (error) {
@@ -563,11 +504,14 @@ app.post('/api/profile', async (req, res) => {
 
 app.get('/api/profile', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase 未配置' });
+    }
+    
     const { username } = req.query;
     
     let query = supabase.from('users').select('*');
     
-    // 如果提供了用户名，只查询该用户
     if (username) {
       query = query.eq('username', username);
     }
@@ -578,33 +522,9 @@ app.get('/api/profile', async (req, res) => {
       throw error;
     }
 
-    res.json({
-      success: true,
-      users: username ? (users.length > 0 ? [users[0]] : []) : users
-    });
+    res.json(users);
   } catch (error) {
     console.error('获取用户信息错误:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/profile/:cid', async (req, res) => {
-  if (!ipfs) {
-    return res.status(503).json({ error: 'IPFS 未连接' });
-  }
-
-  try {
-    const { cid } = req.params;
-    const chunks = [];
-    
-    for await (const chunk of ipfs.cat(cid)) {
-      chunks.push(chunk);
-    }
-    
-    const profile = JSON.parse(Buffer.concat(chunks).toString());
-    res.json({ success: true, profile });
-  } catch (error) {
-    console.error('获取资料错误:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -616,31 +536,23 @@ app.get('/api/subscribe', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  if (ipfs) {
+  // 定期发送 ping 以保持连接
+  const interval = setInterval(() => {
     try {
-      await ipfs.pubsub.subscribe(topic, (msg) => {
-        const tweet = JSON.parse(msg.data.toString());
-        res.write(`data: ${JSON.stringify(tweet)}\n\n`);
-      });
-
-      res.on('close', async () => {
-        if (ipfs) {
-          await ipfs.pubsub.unsubscribe(topic);
-        }
-      });
+      res.write('data: {"type": "ping"}\n\n');
     } catch (error) {
-      console.error('订阅错误:', error);
-      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      clearInterval(interval);
     }
-  } else {
-    res.status(503).json({ error: 'IPFS 未连接' });
-  }
+  }, 30000);
+
+  req.on('close', () => {
+    clearInterval(interval);
+  });
 });
 
 // 启动服务器
 initIPFS().finally(() => {
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`服务器运行在 http://localhost:${PORT}`);
-    console.log(`手机访问地址: http://<您的电脑IP>:${PORT}`);
+    console.log(`服务器运行在 http://0.0.0.0:${PORT}`);
   });
 });
