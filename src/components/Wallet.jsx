@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import walletManager, { NETWORKS } from '../utils/wallet';
 import './Wallet.css';
 
 function Wallet() {
+  const { t } = useTranslation();
   const [isWalletCreated, setIsWalletCreated] = useState(false);
   const [showCreateWallet, setShowCreateWallet] = useState(false);
   const [showImportWallet, setShowImportWallet] = useState(false);
@@ -66,7 +68,7 @@ function Wallet() {
       const balance = await walletManager.getBalance();
       setBalance(balance);
     } catch (error) {
-      setError('加载余额失败: ' + error.message);
+      setError(t('加载余额失败: ') + error.message);
       console.error('Failed to load balance:', error);
     } finally {
       setLoading(false);
@@ -80,10 +82,10 @@ function Wallet() {
       setWalletAddress(walletData.address);
       setMnemonic(walletData.mnemonic);
       setShowCreateWallet(false);
-      setSuccess('钱包创建成功！请妥善保管您的助记词。');
+      setSuccess(t('钱包创建成功！请妥善保管您的助记词。'));
       loadBalance();
     } catch (error) {
-      setError('创建钱包失败: ' + error.message);
+      setError(t('创建钱包失败: ') + error.message);
     }
   };
 
@@ -95,20 +97,20 @@ function Wallet() {
         setIsWalletCreated(true);
         setWalletAddress(walletData.address);
         setShowImportWallet(false);
-        setSuccess('钱包导入成功！');
+        setSuccess(t('钱包导入成功！'));
         loadBalance();
       } else if (mnemonic) {
         const walletData = walletManager.importWalletFromMnemonic(mnemonic);
         setIsWalletCreated(true);
         setWalletAddress(walletData.address);
         setShowImportWallet(false);
-        setSuccess('钱包导入成功！');
+        setSuccess(t('钱包导入成功！'));
         loadBalance();
       } else {
-        setError('请输入私钥或助记词');
+        setError(t('请输入私钥或助记词'));
       }
     } catch (error) {
-      setError('导入钱包失败: ' + error.message);
+      setError(t('导入钱包失败: ') + error.message);
     }
   };
 
@@ -120,14 +122,14 @@ function Wallet() {
         loadTokenPrice(network);
       }
     } catch (error) {
-      setError('切换网络失败: ' + error.message);
+      setError(t('切换网络失败: ') + error.message);
     }
   };
 
   const handleSendTransaction = async () => {
     try {
       if (!sendTo || !sendAmount) {
-        setError('请输入接收地址和金额');
+        setError(t('请输入接收地址和金额'));
         return;
       }
       setLoading(true);
@@ -138,10 +140,10 @@ function Wallet() {
       setSendTo('');
       setSendAmount('');
       setGasEstimate(null);
-      setSuccess('交易已发送！');
+      setSuccess(t('交易已发送！'));
       loadBalance();
     } catch (error) {
-      setError('发送交易失败: ' + error.message);
+      setError(t('发送交易失败: ') + error.message);
     } finally {
       setLoading(false);
     }
@@ -150,14 +152,14 @@ function Wallet() {
   const handleEstimateGas = async () => {
     try {
       if (!sendTo || !sendAmount) {
-        setError('请输入接收地址和金额');
+        setError(t('请输入接收地址和金额'));
         return;
       }
       const estimate = await walletManager.estimateGas(sendTo, sendAmount);
       setGasEstimate(estimate);
       setError('');
     } catch (error) {
-      setError('估算Gas失败: ' + error.message);
+      setError(t('估算Gas失败: ') + error.message);
     }
   };
 
@@ -207,11 +209,11 @@ function Wallet() {
         </div>
         
         <div className="wallet-empty-title">
-          内置钱包
+          {t('内置钱包')}
         </div>
         
         <div className="wallet-empty-description">
-          安全、便捷的多链钱包
+          {t('安全、便捷的多链钱包')}
         </div>
         
         <div className="wallet-empty-actions">
@@ -219,27 +221,27 @@ function Wallet() {
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
             </svg>
-            创建新钱包
+            {t('创建新钱包')}
           </button>
           <button className="wallet-empty-btn secondary" onClick={() => setShowImportWallet(true)} disabled={loading}>
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
             </svg>
-            导入钱包
+            {t('导入钱包')}
           </button>
         </div>
 
         {showCreateWallet && (
           <div className="wallet-modal">
             <div className="wallet-modal-content">
-              <h3>创建新钱包</h3>
-              <p>创建钱包后，请妥善保管您的助记词，它是恢复钱包的唯一方式。</p>
+              <h3>{t('创建新钱包')}</h3>
+              <p>{t('创建钱包后，请妥善保管您的助记词，它是恢复钱包的唯一方式。')}</p>
               <div className="wallet-modal-actions">
                 <button className="wallet-modal-btn cancel" onClick={() => setShowCreateWallet(false)}>
-                  取消
+                  {t('取消')}
                 </button>
                 <button className="wallet-modal-btn confirm" onClick={handleCreateWallet}>
-                  创建
+                  {t('创建')}
                 </button>
               </div>
             </div>
@@ -249,31 +251,31 @@ function Wallet() {
         {showImportWallet && (
           <div className="wallet-modal">
             <div className="wallet-modal-content">
-              <h3>导入钱包</h3>
+              <h3>{t('导入钱包')}</h3>
               <div className="wallet-input-group">
-                <label>私钥</label>
+                <label>{t('私钥')}</label>
                 <input
                   type="password"
                   value={privateKey}
                   onChange={(e) => setPrivateKey(e.target.value)}
-                  placeholder="输入私钥"
+                  placeholder={t('输入私钥')}
                 />
               </div>
               <div className="wallet-input-group">
-                <label>助记词</label>
+                <label>{t('助记词')}</label>
                 <textarea
                   value={mnemonic}
                   onChange={(e) => setMnemonic(e.target.value)}
-                  placeholder="输入助记词（用空格分隔）"
+                  placeholder={t('输入助记词（用空格分隔）')}
                   rows={3}
                 />
               </div>
               <div className="wallet-modal-actions">
                 <button className="wallet-modal-btn cancel" onClick={() => setShowImportWallet(false)}>
-                  取消
+                  {t('取消')}
                 </button>
                 <button className="wallet-modal-btn confirm" onClick={handleImportWallet}>
-                  导入
+                  {t('导入')}
                 </button>
               </div>
             </div>
@@ -293,7 +295,7 @@ function Wallet() {
 
       <div className="wallet-header">
         <div className="wallet-header-top">
-          <div className="wallet-title">钱包</div>
+          <div className="wallet-title">{t('钱包')}</div>
           <div className="wallet-network-dropdown">
             <div className="wallet-network-badge" onClick={() => setShowNetworkDropdown(!showNetworkDropdown)}>
               <span>{NETWORKS[currentNetwork].name}</span>
@@ -321,7 +323,7 @@ function Wallet() {
         </div>
         <div className="wallet-balance">
           <div className="balance-amount">
-            {loading ? '加载中...' : `${parseFloat(balance).toFixed(6)}`}
+            {loading ? t('加载中...') : `${parseFloat(balance).toFixed(6)}`}
           </div>
           <div className="balance-currency">{NETWORKS[currentNetwork].nativeCurrency.symbol}</div>
         </div>
@@ -337,7 +339,7 @@ function Wallet() {
               <path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
             </svg>
           </div>
-          <div className="wallet-action-text">接收</div>
+          <div className="wallet-action-text">{t('接收')}</div>
         </button>
         <button className="wallet-action-item" onClick={() => setShowSendTransaction(true)} disabled={loading}>
           <div className="wallet-action-icon send-icon">
@@ -345,7 +347,7 @@ function Wallet() {
               <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
             </svg>
           </div>
-          <div className="wallet-action-text">发送</div>
+          <div className="wallet-action-text">{t('发送')}</div>
         </button>
         <button className="wallet-action-item" onClick={loadBalance} disabled={loading}>
           <div className="wallet-action-icon refresh-icon">
@@ -353,17 +355,17 @@ function Wallet() {
               <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
             </svg>
           </div>
-          <div className="wallet-action-text">{loading ? '刷新中...' : '刷新'}</div>
+          <div className="wallet-action-text">{loading ? t('刷新中...') : t('刷新')}</div>
         </button>
       </div>
 
       <div className="wallet-address-card">
-        <div className="address-label">钱包地址</div>
+        <div className="address-label">{t('钱包地址')}</div>
         <div className="address-value">{walletAddress}</div>
       </div>
 
       <div className="wallet-tokens-section">
-        <div className="tokens-label">代币持有</div>
+        <div className="tokens-label">{t('代币持有')}</div>
         <div className="token-list">
           <div className="token-item">
             <div className="token-icon">
@@ -377,7 +379,7 @@ function Wallet() {
             </div>
             <div className="token-info">
               <div className="token-symbol">{NETWORKS[currentNetwork].nativeCurrency.symbol}</div>
-              <div className="token-balance">{loading ? '加载中...' : `${parseFloat(balance).toFixed(6)}`}</div>
+              <div className="token-balance">{loading ? t('加载中...') : `${parseFloat(balance).toFixed(6)}`}</div>
             </div>
             <div className="token-balance-info">
               <div className="token-price">${tokenPrice}</div>
@@ -392,13 +394,13 @@ function Wallet() {
       {mnemonic && (
         <div className="wallet-mnemonic-card">
           <div className="mnemonic-header">
-            <span>助记词</span>
+            <span>{t('助记词')}</span>
             <div>
               <button onClick={() => setShowMnemonic(!showMnemonic)}>
-                {showMnemonic ? '隐藏' : '显示'}
+                {showMnemonic ? t('隐藏') : t('显示')}
               </button>
               <button onClick={handleCopyMnemonic}>
-                {copied ? '已复制' : '复制'}
+                {copied ? t('已复制') : t('复制')}
               </button>
             </div>
           </div>
@@ -413,23 +415,23 @@ function Wallet() {
       {showSendTransaction && (
         <div className="wallet-modal">
           <div className="wallet-modal-content">
-            <h3>发送交易</h3>
+            <h3>{t('发送交易')}</h3>
             <div className="wallet-input-group">
-              <label>接收地址</label>
+              <label>{t('接收地址')}</label>
               <input
                 type="text"
                 value={sendTo}
                 onChange={(e) => setSendTo(e.target.value)}
-                placeholder="输入接收地址"
+                placeholder={t('输入接收地址')}
               />
             </div>
             <div className="wallet-input-group">
-              <label>金额</label>
+              <label>{t('金额')}</label>
               <input
                 type="number"
                 value={sendAmount}
                 onChange={(e) => setSendAmount(e.target.value)}
-                placeholder={`输入金额 (${NETWORKS[currentNetwork].nativeCurrency.symbol})`}
+                placeholder={t('输入金额')}
                 step="0.000001"
               />
             </div>
@@ -444,13 +446,13 @@ function Wallet() {
                 setShowSendTransaction(false);
                 setGasEstimate(null);
               }}>
-                取消
+                {t('取消')}
               </button>
               <button className="wallet-modal-btn" onClick={handleEstimateGas}>
-                估算Gas
+                {t('估算Gas')}
               </button>
               <button className="wallet-modal-btn confirm" onClick={handleSendTransaction} disabled={loading}>
-                {loading ? '发送中...' : '发送'}
+                {loading ? t('发送中...') : t('发送')}
               </button>
             </div>
           </div>
@@ -459,7 +461,7 @@ function Wallet() {
 
       {txHash && (
         <div className="tx-success">
-          <div>交易已发送！</div>
+          <div>{t('交易已发送！')}</div>
           <div className="tx-hash">{txHash}</div>
         </div>
       )}
@@ -467,17 +469,17 @@ function Wallet() {
       {showReceiveModal && (
         <div className="wallet-modal">
           <div className="wallet-modal-content">
-            <h3>接收资产</h3>
+            <h3>{t('接收资产')}</h3>
             <div className="wallet-address-card">
-              <div className="address-label">钱包地址</div>
+              <div className="address-label">{t('钱包地址')}</div>
               <div className="address-value">{walletAddress}</div>
               <button className="copy-address-btn" onClick={handleCopyAddress}>
-                {copied ? '已复制' : '复制地址'}
+                {copied ? t('已复制') : t('复制地址')}
               </button>
             </div>
             <div className="wallet-modal-actions">
               <button className="wallet-modal-btn confirm" onClick={() => setShowReceiveModal(false)}>
-                关闭
+                {t('关闭')}
               </button>
             </div>
           </div>

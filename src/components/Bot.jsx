@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
+import { useTranslation } from 'react-i18next';
 import './Bot.css';
 import walletManager from '../utils/wallet';
 
@@ -196,6 +197,7 @@ const UNISWAP_V4_STATE_VIEW_ABI = [
 ];
 
 const Bot = () => {
+  const { t } = useTranslation();
   const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState('');
   const [currentNetwork, setCurrentNetwork] = useState('eth');
@@ -1435,7 +1437,7 @@ const Bot = () => {
   return (
     <div className="bot-container">
       <div className="bot-header">
-        <h2>交易机器人</h2>
+        <h2>{t('交易机器人')}</h2>
         <div className="wallet-status">
           {isWalletConnected ? (
             <span className="wallet-address">
@@ -1443,7 +1445,7 @@ const Bot = () => {
             </span>
           ) : (
             <span className="connect-wallet-btn" onClick={() => walletManager.connect()}>
-              连接钱包
+              {t('连接钱包')}
             </span>
           )}
         </div>
@@ -1483,7 +1485,7 @@ const Bot = () => {
             </div>
           </div>
           <div className="balance-info">
-            <span className="balance-label">余额</span>
+            <span className="balance-label">{t('余额')}</span>
             <span className="balance-amount">{balance} {NETWORKS[currentNetwork].nativeToken}</span>
           </div>
         </div>
@@ -1494,7 +1496,7 @@ const Bot = () => {
               type="text"
               value={tokenAddress}
               onChange={handleTokenAddressChange}
-              placeholder="合约地址"
+              placeholder={t('合约地址')}
               className="contract-address-input"
             />
             <button 
@@ -1502,7 +1504,7 @@ const Bot = () => {
               onClick={loadTokenInfo}
               disabled={loadingPrice}
             >
-              {loadingPrice ? '加载中...' : '加载'}
+              {loadingPrice ? t('加载中...') : t('加载')}
             </button>
           </div>
         </div>
@@ -1527,7 +1529,7 @@ const Bot = () => {
             
             <div className="token-stats-section">
               <div className="stat-item">
-                <div className="stat-label">流动性</div>
+                <div className="stat-label">{t('流动性')}</div>
                 <div className="stat-value">
                   ${tokenDetail.liquidity && Array.isArray(tokenDetail.liquidity) && tokenDetail.liquidity.length > 0 
                     ? tokenDetail.liquidity.reduce((sum, item) => sum + (item.liquidity || 0), 0).toFixed(2)
@@ -1535,11 +1537,11 @@ const Bot = () => {
                 </div>
               </div>
               <div className="stat-item">
-                <div className="stat-label">市值</div>
+                <div className="stat-label">{t('市值')}</div>
                 <div className="stat-value">$2,858,497</div>
               </div>
               <div className="stat-item">
-                <div className="stat-label">持有</div>
+                <div className="stat-label">{t('持有')}</div>
                 <div className="stat-value">0.0000</div>
               </div>
             </div>
@@ -1548,7 +1550,7 @@ const Bot = () => {
 
         <div className="anti-rug-section">
           <div className="anti-rug-header">
-            <span className="anti-rug-title">🛡️ 防夹模式</span>
+            <span className="anti-rug-title">🛡️ {t('防夹模式')}</span>
             <label className="anti-rug-switch">
               <input 
                 type="checkbox" 
@@ -1565,24 +1567,24 @@ const Bot = () => {
               onClick={() => checkRugPull(tokenAddress, currentNetwork)}
               disabled={checkingRug}
             >
-              {checkingRug ? '检测中...' : '🔍 安全检测'}
+              {checkingRug ? t('检测中...') : `🔍 ${t('安全检测')}`}
             </button>
           )}
           
           {rugCheckResult && (
             <div className={`rug-check-result ${rugCheckResult.riskLevel}`}>
               <div className="risk-level">
-                风险等级: 
+                {t('风险等级')}: 
                 <span className={`risk-badge ${rugCheckResult.riskLevel}`}>
-                  {rugCheckResult.riskLevel === 'high' ? '🔴 高风险' : 
-                   rugCheckResult.riskLevel === 'medium' ? '🟡 中风险' : 
-                   rugCheckResult.riskLevel === 'low' ? '🟢 低风险' : '⚪ 未知'}
+                  {rugCheckResult.riskLevel === 'high' ? `🔴 ${t('高风险')}` : 
+                   rugCheckResult.riskLevel === 'medium' ? `🟡 ${t('中风险')}` : 
+                   rugCheckResult.riskLevel === 'low' ? `🟢 ${t('低风险')}` : `⚪ ${t('未知')}`}
                 </span>
               </div>
               
               {rugCheckResult.warnings.length > 0 && (
                 <div className="warnings-section">
-                  <div className="warnings-title">警告:</div>
+                  <div className="warnings-title">{t('警告')}:</div>
                   {rugCheckResult.warnings.map((warning, index) => (
                     <div key={index} className="warning-item">{warning}</div>
                   ))}
@@ -1591,7 +1593,7 @@ const Bot = () => {
               
               {rugCheckResult.infos.length > 0 && (
                 <div className="infos-section">
-                  <div className="infos-title">信息:</div>
+                  <div className="infos-title">{t('信息')}:</div>
                   {rugCheckResult.infos.map((info, index) => (
                     <div key={index} className="info-item">{info}</div>
                   ))}
@@ -1605,7 +1607,7 @@ const Bot = () => {
           <div className="trade-section">
             <div className="buy-section">
               <div className="section-header">
-                <span className="section-title">买入 {tokenDetail.symbol}</span>
+                <span className="section-title">{t('买入')} {tokenDetail.symbol}</span>
                 <span className="section-arrow">↗</span>
               </div>
               
@@ -1637,13 +1639,13 @@ const Bot = () => {
                 onClick={handleBuy}
                 disabled={loading}
               >
-                {loading ? '处理中...' : '买入'}
+                {loading ? t('处理中...') : t('买入')}
               </button>
             </div>
 
             <div className="sell-section">
               <div className="section-header">
-                <span className="section-title">卖出 {tokenDetail.symbol}</span>
+                <span className="section-title">{t('卖出')} {tokenDetail.symbol}</span>
                 <span className="section-arrow">↘</span>
               </div>
               
@@ -1675,18 +1677,18 @@ const Bot = () => {
                 onClick={handleSell}
                 disabled={loading}
               >
-                {loading ? '处理中...' : '卖出'}
+                {loading ? t('处理中...') : t('卖出')}
               </button>
             </div>
           </div>
         )}
 
         <div className="bot-section">
-          <h3>指令终端</h3>
+          <h3>{t('指令终端')}</h3>
           <div className="command-terminal">
             <div className="command-history">
               {commandHistory.length === 0 ? (
-                <div className="no-commands">暂无指令历史</div>
+                <div className="no-commands">{t('暂无指令历史')}</div>
               ) : (
                 commandHistory.map((cmd, index) => (
                   <div key={index} className="command-item">
@@ -1705,7 +1707,7 @@ const Bot = () => {
                 value={commandInput}
                 onChange={(e) => setCommandInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && commandInput.trim() && executeCommand(commandInput)}
-                placeholder="输入指令 (输入 /help 查看帮助)"
+                placeholder={t('输入指令 (输入 /help 查看帮助)')}
                 disabled={loading}
               />
               <button 
@@ -1713,7 +1715,7 @@ const Bot = () => {
                 onClick={() => commandInput.trim() && executeCommand(commandInput)}
                 disabled={loading || !commandInput.trim()}
               >
-                发送
+                {t('发送')}
               </button>
             </div>
           </div>

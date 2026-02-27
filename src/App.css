@@ -3304,6 +3304,148 @@ body {
     color: #07c160;
   }
 
+  .create-group-page {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-primary);
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .create-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-card) var(--spacing-page);
+    background: rgba(26, 26, 26, 0.6);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    border-bottom: 1px solid var(--divider-alpha);
+    height: 56px;
+    padding-top: max(var(--spacing-card), env(safe-area-inset-top));
+  }
+
+  .create-group-title {
+    font-size: 18px;
+    font-weight: 600;
+    background: var(--purple-white-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .create-group-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-element);
+  }
+
+  .create-group-content .friend-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-element);
+  }
+
+  .create-group-content .friend-item {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-card);
+    background: rgba(26, 26, 26, 0.6);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--divider-alpha);
+    border-radius: var(--radius-card);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .create-group-content .friend-item.selected {
+    background: rgba(124, 58, 237, 0.2);
+    border-color: var(--primary-light);
+  }
+
+  .create-group-content .friend-item:active {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .create-group-content .friend-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-avatar);
+    background: var(--primary-gradient);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 18px;
+    margin-right: 12px;
+  }
+
+  .create-group-content .friend-info {
+    flex: 1;
+  }
+
+  .create-group-content .friend-name {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .create-group-content .friend-check {
+    width: 24px;
+    height: 24px;
+    background: var(--primary-gradient);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+  }
+
+  .create-group-content .friend-check svg {
+    width: 16px;
+    height: 16px;
+    color: white;
+  }
+
+  .create-group-content .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+  }
+
+  .create-group-header .back-btn {
+    background: rgba(124, 58, 237, 0.1);
+    border: 1px solid rgba(124, 58, 237, 0.3);
+    color: var(--primary-light);
+    cursor: pointer;
+    padding: 10px;
+    border-radius: var(--radius-button);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+  }
+
+  .create-group-header .back-btn:active {
+    background: rgba(124, 58, 237, 0.2);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .create-group-header .back-btn svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .create-group-header .header-placeholder {
+    width: 44px;
+  }
+
   .settings-page {
     position: fixed;
     top: 0;
@@ -3992,8 +4134,60 @@ body {
   background: rgba(26, 26, 26, 0.6);
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
-  border: 1px solid var(--divider-alpha);
-  border-radius: var(--radius-card);
+  border-top: 1px solid var(--divider-alpha);
+}
+
+.create-group-footer .selected-count {
+  text-align: center;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.create-group-footer .footer-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.create-group-footer .cancel-btn {
+  flex: 1;
+  padding: 14px 20px;
+  border-radius: var(--radius-button);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  transition: all 0.2s;
+}
+
+.create-group-footer .cancel-btn:active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.create-group-footer .create-btn {
+  flex: 2;
+  padding: 14px 20px;
+  border-radius: var(--radius-button);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: var(--primary-gradient);
+  color: white;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  transition: all 0.2s;
+}
+
+.create-group-footer .create-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+}
+
+.create-group-footer .create-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .create-group-btn {

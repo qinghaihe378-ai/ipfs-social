@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import './App.css';
 import Wallet from './components/Wallet';
 import Bot from './components/Bot';
@@ -42,12 +43,12 @@ function App() {
   const [groupName, setGroupName] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [showInviteFriend, setShowInviteFriend] = useState(false);
   const [editingGroupName, setEditingGroupName] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [uploadingGroupAvatar, setUploadingGroupAvatar] = useState(false);
   const [selectedFriendsForGroup, setSelectedFriendsForGroup] = useState([]);
   const [showFileUpload, setShowFileUpload] = useState(false);
-  const [language, setLanguage] = useState(localStorage.getItem('language') || 'zh');
   const [showLanguageSelect, setShowLanguageSelect] = useState(false);
   const [searchResult, setSearchResult] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -55,6 +56,8 @@ function App() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [messageInput, setMessageInput] = useState('');
   const recordingInterval = useRef(null);
+
+  const { t, i18n } = useTranslation();
 
   const getInitial = (str) => {
     return str && str.charAt(0) ? str.charAt(0).toUpperCase() : '?';
@@ -237,7 +240,7 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             username: displayUsername,
-            bio: isNewWallet ? '新用户，通过钱包创建' : '钱包用户',
+            bio: isNewWallet ? t('新用户，通过钱包创建') : t('钱包用户'),
             avatar: '',
             publicKey: walletAddress
           })
@@ -252,12 +255,12 @@ function App() {
           setIsLoggedIn(true);
           console.log('钱包登录成功(新用户):', displayUsername);
         } else {
-          alert('钱包登录失败，请重试');
+          alert(t('钱包登录失败，请重试'));
         }
       }
     } catch (error) {
       console.error('钱包登录失败:', error);
-      alert('钱包登录失败: ' + error.message);
+      alert(t('钱包登录失败: ') + error.message);
     } finally {
       setLoading(false);
     }
@@ -321,12 +324,12 @@ function App() {
 
   const postTweet = async () => {
     if (!content.trim()) {
-      alert('请输入推文内容');
+      alert(t('请输入推文内容'));
       return;
     }
 
     if (!username || !publicKey) {
-      alert('请先创建用户资料');
+      alert(t('请先创建用户资料'));
       setShowCompose(true);
       return;
     }
@@ -352,7 +355,7 @@ function App() {
       }
     } catch (error) {
       console.error('发布推文失败:', error);
-      alert('发布推文失败');
+      alert(t('发布推文失败'));
     } finally {
       setLoading(false);
     }
@@ -365,10 +368,10 @@ function App() {
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return '刚刚';
-    if (minutes < 60) return `${minutes}分钟前`;
-    if (hours < 24) return `${hours}小时前`;
-    if (days < 7) return `${days}天前`;
+    if (minutes < 1) return t('刚刚');
+    if (minutes < 60) return `${minutes}${t('分钟前')}`;
+    if (hours < 24) return `${hours}${t('小时前')}`;
+    if (days < 7) return `${days}${t('天前')}`;
     return new Date(timestamp).toLocaleDateString('zh-CN');
   };
 
@@ -428,17 +431,17 @@ function App() {
 
   const addFriend = async () => {
     if (!friendUsername.trim()) {
-      alert('请输入好友用户名');
+      alert(t('请输入好友用户名'));
       return;
     }
 
     if (friendUsername === username) {
-      alert('不能添加自己为好友');
+      alert(t('不能添加自己为好友'));
       return;
     }
 
     if (friends.some(f => f.username === friendUsername)) {
-      alert('已经是好友了');
+      alert(t('已经是好友了'));
       return;
     }
 
@@ -452,7 +455,7 @@ function App() {
       const data = await response.json();
       
       if (!data.exists) {
-        alert('该用户不存在，请确认用户名正确');
+        alert(t('该用户不存在，请确认用户名正确'));
         return;
       }
 
@@ -471,13 +474,13 @@ function App() {
       if (requestData.success) {
         setFriendUsername('');
         setShowAddFriend(false);
-        alert('好友申请已发送！');
+        alert(t('好友申请已发送！'));
       } else {
-        alert('发送好友申请失败: ' + (requestData.error || '未知错误'));
+        alert(t('发送好友申请失败: ') + (requestData.error || t('未知错误')));
       }
     } catch (error) {
       console.error('添加好友失败:', error);
-      alert('添加好友失败');
+      alert(t('添加好友失败'));
     }
   };
 
@@ -499,18 +502,18 @@ function App() {
         if (action === 'accept') {
           // 从服务器同步好友列表
           await syncFriendsFromServer();
-          alert('已添加好友！');
+          alert(t('已添加好友！'));
         } else {
-          alert('已拒绝好友申请');
+          alert(t('已拒绝好友申请'));
         }
         // 更新好友申请列表
         setFriendRequests(prev => prev.filter(req => req.id !== requestId));
       } else {
-        alert('处理好友申请失败: ' + (data.error || '未知错误'));
+        alert(t('处理好友申请失败: ') + (data.error || t('未知错误')));
       }
     } catch (error) {
       console.error('处理好友申请失败:', error);
-      alert('处理好友申请失败');
+      alert(t('处理好友申请失败'));
     }
   };
 
@@ -757,7 +760,7 @@ function App() {
 
   const createGroup = async () => {
     if (!groupName.trim()) {
-      alert('请输入群组名称');
+      alert(t('请输入群组名称'));
       return;
     }
 
@@ -795,11 +798,11 @@ function App() {
         setGroupName('');
         setSelectedFriendsForGroup([]);
         setShowCreateGroup(false);
-        alert('群组创建成功！');
+        alert(t('群组创建成功！'));
       }
     } catch (error) {
       console.error('创建群组失败:', error);
-      alert('创建群组失败');
+      alert(t('创建群组失败'));
     }
   };
 
@@ -827,13 +830,13 @@ function App() {
       }
     } catch (error) {
       console.error('发送群消息失败:', error);
-      alert('发送群消息失败');
+      alert(t('发送群消息失败'));
     }
   };
 
   const updateGroupName = async (groupId, newName) => {
     if (!newName.trim()) {
-      alert('群名称不能为空');
+      alert(t('群名称不能为空'));
       return;
     }
 
@@ -853,13 +856,13 @@ function App() {
         setGroups(prevGroups => prevGroups.map(g => g.id === groupId ? data.group : g));
         setSelectedGroup(data.group);
         setEditingGroupName(false);
-        alert('群名称修改成功！');
+        alert(t('群名称修改成功！'));
       } else {
-        alert(data.error || '修改失败');
+        alert(data.error || t('修改失败'));
       }
     } catch (error) {
       console.error('更新群名称失败:', error);
-      alert('更新群名称失败');
+      alert(t('更新群名称失败'));
     }
   };
 
@@ -884,13 +887,13 @@ function App() {
           return updatedGroups;
         });
         setSelectedGroup(prev => ({ ...prev, avatar: avatarUrl }));
-        alert('群头像设置成功！');
+        alert(t('群头像设置成功！'));
         setUploadingGroupAvatar(false);
       };
       reader.readAsDataURL(file);
     } catch (error) {
       console.error('设置群头像失败:', error);
-      alert('设置群头像失败');
+      alert(t('设置群头像失败'));
       setUploadingGroupAvatar(false);
     }
   };
@@ -909,14 +912,14 @@ function App() {
       const data = await response.json();
       
       if (data.success) {
-        alert(`已邀请 ${friendUsername} 加入群组`);
+        alert(`${t('已邀请')} ${friendUsername} ${t('加入群组')}`);
         loadGroups();
       } else {
-        alert(data.error || '邀请失败');
+        alert(data.error || t('邀请失败'));
       }
     } catch (error) {
       console.error('邀请加入群组失败:', error);
-      alert('邀请加入群组失败');
+      alert(t('邀请加入群组失败'));
     }
   };
 
@@ -945,11 +948,11 @@ function App() {
           setMessages(updatedMessages);
           localStorage.setItem('messages', JSON.stringify(updatedMessages));
           setShowFileUpload(false);
-          alert('文件发送成功！');
+          alert(t('文件发送成功！'));
         }
       } catch (error) {
         console.error('上传文件失败:', error);
-        alert('上传文件失败');
+        alert(t('上传文件失败'));
       }
     };
     reader.readAsDataURL(file);
@@ -968,7 +971,7 @@ function App() {
       }
     } catch (error) {
       console.error('下载文件失败:', error);
-      alert('下载文件失败');
+      alert(t('下载文件失败'));
     }
   };
 
@@ -993,11 +996,11 @@ function App() {
                 <svg viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '8px' }}>
                   <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
                 </svg>
-                {loading ? '登录中...' : '钱包登录'}
+                {loading ? t('登录中...') : t('钱包登录')}
               </button>
               
               <div className="login-info">
-                <p>基于 IPFS + PubSub 的去中心化社交网络</p>
+                <p>{t('基于 IPFS + PubSub 的去中心化社交网络')}</p>
               </div>
             </div>
           </div>
@@ -1017,28 +1020,28 @@ function App() {
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 1.696L.622 8.807l1.06 1.696L3 9.679V19.5C3 20.881 4.119 22 5.5 22h13c1.381 0 2.5-1.119 2.5-2.5V9.679l1.318.824 1.06-1.696L12 1.696zM12 16.5c-1.933 0-3.5-1.567-3.5-3.5s1.567-3.5 3.5-3.5 3.5 1.567 3.5 3.5-1.567 3.5-3.5 3.5z"/>
             </svg>
-            <span>首页</span>
+            <span>{t('首页')}</span>
           </button>
           
           <button className={`nav-item ${activeTab === 'explore' ? 'active' : ''}`} onClick={() => setActiveTab('explore')}>
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M9.697 3H11v2h-.697C7.303 5 5 7.426 5 10.5c0 1.385.448 2.67 1.21 3.714l1.44-1.44C7.246 12.053 7 11.313 7 10.5 7 8.57 8.57 7 10.303 7H11v2.5l4-3.5-4-3.5V3zm4.606 6.786l-1.44 1.44C13.754 11.947 14 12.687 14 13.5c0 1.93-1.57 3.5-3.303 3.5H10v-2.5l-4 3.5 4 3.5V19h1.697c3.303 0 5.606-2.426 5.606-5.5 0-1.385-.448-2.67-1.21-3.714z"/>
             </svg>
-            <span>探索</span>
+            <span>{t('探索')}</span>
           </button>
           
           <button className={`nav-item ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => setActiveTab('notifications')}>
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M19.993 9.042C19.48 5.017 16.054 2 11.996 2s-7.49 3.021-7.999 7.051L2.866 18H7.1c.463 2.282 2.481 4 4.9 4s4.437-1.718 4.9-4h4.236l-1.143-8.958zM12 20c-1.306 0-2.417-.835-2.829-2h5.658c-.412 1.165-1.523 2-2.829 2zm-6.866-4l.847-6.698C6.364 6.272 8.941 4 11.996 4s5.627 2.268 6.013 5.295L18.864 16H5.134z"/>
             </svg>
-            <span>通知</span>
+            <span>{t('通知')}</span>
           </button>
           
           <button className={`nav-item ${activeTab === 'messages' ? 'active' : ''}`} onClick={() => setActiveTab('messages')}>
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M1.998 5.5c0-1.381 1.119-2.5 2.5-2.5h15c1.381 0 2.5 1.119 2.5 2.5v13c0 1.381-1.119 2.5-2.5 2.5h-15c-1.381 0-2.5-1.119-2.5-2.5v-13zm2.5-.5c-.276 0-.5.224-.5.5v2.764l8 3.638 8-3.636V5.5c0-.276-.224-.5-.5-.5h-15zm15.5 5.463l-8 3.636-8-3.638V18.5c0 .276.224.5.5.5h15c.276 0 .5-.224.5-.5v-8.037z"/>
             </svg>
-            <span>私信</span>
+            <span>{t('私信')}</span>
           </button>
           
           <button className={`nav-item ${activeTab === 'bot' ? 'active' : ''}`} onClick={() => setActiveTab('bot')}>
@@ -1052,18 +1055,18 @@ function App() {
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5zM6.5 4c-.276 0-.5.22-.5.5v14.56l6-4.29 6 4.29V4.5c0-.28-.224-.5-.5-.5h-11z"/>
             </svg>
-            <span>书签</span>
+            <span>{t('书签')}</span>
           </button>
           
           <button className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M5.651 19h12.698c-.337-1.8-1.023-3.21-1.945-4.19C15.318 13.65 13.838 13 12 13s-3.317.65-4.404 1.81c-.922.98-1.608 2.39-1.945 4.19zm.486-5.56C7.627 11.85 9.648 11 12 11s4.373.85 5.863 2.44c1.477 1.58 2.366 3.8 2.632 6.46l.11 1.1H3.395l.11-1.1c.266-2.66 1.155-4.88 2.632-6.46zM12 4c-1.105 0-2 .9-2 2s.895 2 2 2 2-.9 2-2-.895-2-2-2zM8 6c0-2.21 1.791-4 4-4s4 1.79 4 4-1.791 4-4 4-4-1.79-4-4z"/>
             </svg>
-            <span>个人资料</span>
+            <span>{t('个人资料')}</span>
           </button>
         </div>
         
-        <button className="post-btn-large" onClick={() => setShowCompose(true)}>发布</button>
+        <button className="post-btn-large" onClick={() => setShowCompose(true)}>{t('发布')}</button>
         
         {profileCid && (
           <div className="user-profile">
@@ -1082,10 +1085,10 @@ function App() {
       <main className="main-content">
         {/* 桌面端标题栏 */}
         <header className="main-header">
-          <h1>首页</h1>
+          <h1>{t('首页')}</h1>
           <div className="tabs">
-            <button className={`tab ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>推荐</button>
-            <button className={`tab ${activeTab === 'following' ? 'active' : ''}`} onClick={() => setActiveTab('following')}>关注</button>
+            <button className={`tab ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>{t('推荐')}</button>
+            <button className={`tab ${activeTab === 'following' ? 'active' : ''}`} onClick={() => setActiveTab('following')}>{t('关注')}</button>
           </div>
         </header>
 
@@ -1096,7 +1099,7 @@ function App() {
           </div>
           <div className="compose-area">
             <textarea
-              placeholder="有什么新鲜事？"
+              placeholder={t('有什么新鲜事？')}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               maxLength={280}
@@ -1108,7 +1111,7 @@ function App() {
                 disabled={loading || !content.trim()}
                 className="post-btn"
               >
-                发布
+                {t('发布')}
               </button>
             </div>
           </div>
@@ -1121,7 +1124,7 @@ function App() {
               {!selectedChat ? (
                 <>
                   <div className="wechat-header">
-                    <div className="wechat-title">消息</div>
+                    <div className="wechat-title">{t('消息')}</div>
                     <button className="wechat-add-btn" onClick={() => setShowAddFriend(true)} style={{ position: 'absolute', right: '16px' }}>
                       <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
@@ -1131,7 +1134,7 @@ function App() {
                   <div className="messages-list">
                     {friends.length === 0 && groups.length === 0 ? (
                       <div className="empty-state">
-                        <p>暂无好友，点击右上角添加好友</p>
+                        <p>{t('暂无好友，点击右上角添加好友')}</p>
                       </div>
                     ) : (
                       <>
@@ -1148,7 +1151,7 @@ function App() {
                               <div className="message-preview">
                                 {getChatMessages(`group:${group.id}`).length > 0
                                   ? getChatMessages(`group:${group.id}`)[getChatMessages(`group:${group.id}`).length - 1].content
-                                  : '暂无消息'}
+                                  : t('暂无消息')}
                               </div>
                             </div>
                           </div>
@@ -1167,7 +1170,7 @@ function App() {
                               <div className="message-preview">
                                 {getChatMessages(friend.username).length > 0
                                   ? getChatMessages(friend.username)[getChatMessages(friend.username).length - 1].content
-                                  : '暂无消息'}
+                                  : t('暂无消息')}
                               </div>
                             </div>
                           </div>
@@ -1191,7 +1194,7 @@ function App() {
                     <button 
                       className="chat-more-btn" 
                       onClick={() => {
-                        if (confirm('确定要清空与该好友的聊天记录吗？')) {
+                        if (confirm(t('确定要清空与该好友的聊天记录吗？'))) {
                           clearChatMessages(selectedChat);
                         }
                       }}
@@ -1211,7 +1214,7 @@ function App() {
                           className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}
                           onContextMenu={(e) => {
                             e.preventDefault();
-                            if (confirm('确定要删除这条消息吗？')) {
+                            if (confirm(t('确定要删除这条消息吗？'))) {
                               deleteMessage(msg.id);
                             }
                           }}
@@ -1261,7 +1264,7 @@ function App() {
                     </button>
                     <input
                       type="text"
-                      placeholder="发送消息"
+                      placeholder={t('发送消息')}
                       value={messageInput}
                       onChange={(e) => setMessageInput(e.target.value)}
                       onKeyPress={(e) => {
@@ -1321,7 +1324,7 @@ function App() {
           {activeTab === 'contacts' && (
             <div className="contacts-content">
               <div className="contacts-header">
-                <div className="contacts-title">好友</div>
+                <div className="contacts-title">{t('好友')}</div>
                 <button className="add-contact-btn" onClick={() => setShowAddFriend(true)} style={{ position: 'absolute', right: '16px' }}>
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
@@ -1337,7 +1340,7 @@ function App() {
                     </svg>
                   </div>
                   <div className="contact-info">
-                    <div className="contact-name">新的朋友</div>
+                    <div className="contact-name">{t('新的朋友')}</div>
                     {friendRequests.length > 0 && (
                       <div className="contact-badge">{friendRequests.length}</div>
                     )}
@@ -1350,7 +1353,7 @@ function App() {
                     </svg>
                   </div>
                   <div className="contact-info">
-                    <div className="contact-name">群聊</div>
+                    <div className="contact-name">{t('群聊')}</div>
                   </div>
                 </div>
                 
@@ -1371,7 +1374,7 @@ function App() {
                         </div>
                         <div className="contact-info">
                           <div className="contact-name">{group.name}</div>
-                          <div className="contact-subtitle">{group.members ? group.members.length : 0} 成员</div>
+                          <div className="contact-subtitle">{group.members ? group.members.length : 0} {t('成员')}</div>
                         </div>
                       </div>
                     ))}
@@ -1422,7 +1425,7 @@ function App() {
           {activeTab === 'explore' && (
             <div className="explore-content">
               <div className="explore-header">
-                <div className="explore-title">发现</div>
+                <div className="explore-title">{t('发现')}</div>
                 <button className="explore-compose-btn" onClick={() => setShowCompose(true)}>
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14h-2v-4h-2v4H8v-7h2v1.5h.25c.41-.75 1.16-1.5 2.25-1.5s1.84.75 2.25 1.5H16v-1.5h2v7z"/>
@@ -1432,7 +1435,7 @@ function App() {
               <div className="moments-list">
                 {tweets.length === 0 ? (
                   <div className="empty-state">
-                    <p>暂无动态</p>
+                    <p>{t('暂无动态')}</p>
                   </div>
                 ) : (
                   tweets.map(tweet => (
@@ -1454,9 +1457,9 @@ function App() {
 
           {activeTab === 'notifications' && (
             <div className="notifications-content">
-              <h2>通知</h2>
+              <h2>{t('通知')}</h2>
               <div className="empty-state">
-                <p>暂无通知</p>
+                <p>{t('暂无通知')}</p>
               </div>
             </div>
           )}
@@ -1466,7 +1469,7 @@ function App() {
               {!selectedChat ? (
                 <>
                   <div className="wechat-header">
-                    <div className="wechat-title">消息</div>
+                    <div className="wechat-title">{t('消息')}</div>
                     <button className="wechat-add-btn" onClick={() => setShowAddFriend(true)}>
                       <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
@@ -1476,7 +1479,7 @@ function App() {
                   <div className="messages-list">
                     {friends.length === 0 && groups.length === 0 ? (
                       <div className="empty-state">
-                        <p>暂无好友，点击右上角添加好友</p>
+                        <p>{t('暂无好友，点击右上角添加好友')}</p>
                       </div>
                     ) : (
                       <>
@@ -1493,7 +1496,7 @@ function App() {
                               <div className="message-preview">
                                 {getChatMessages(`group:${group.id}`).length > 0
                                   ? getChatMessages(`group:${group.id}`)[getChatMessages(`group:${group.id}`).length - 1].content
-                                  : '暂无消息'}
+                                  : t('暂无消息')}
                               </div>
                             </div>
                           </div>
@@ -1512,7 +1515,7 @@ function App() {
                               <div className="message-preview">
                                 {getChatMessages(friend.username).length > 0
                                   ? getChatMessages(friend.username)[getChatMessages(friend.username).length - 1].content
-                                  : '暂无消息'}
+                                  : t('暂无消息')}
                               </div>
                             </div>
                           </div>
@@ -1556,7 +1559,7 @@ function App() {
                           className={`chat-message ${msg.from === username ? 'sent' : 'received'}`}
                           onContextMenu={(e) => {
                             e.preventDefault();
-                            if (confirm('确定要删除这条消息吗？')) {
+                            if (confirm(t('确定要删除这条消息吗？'))) {
                               deleteMessage(msg.id);
                             }
                           }}
@@ -1606,7 +1609,7 @@ function App() {
                     </button>
                     <input
                       type="text"
-                      placeholder="发送消息"
+                      placeholder={t('发送消息')}
                       value={messageInput}
                       onChange={(e) => setMessageInput(e.target.value)}
                       onKeyPress={(e) => {
@@ -1665,9 +1668,9 @@ function App() {
 
           {activeTab === 'bookmarks' && (
             <div className="bookmarks-content">
-              <h2>书签</h2>
+              <h2>{t('书签')}</h2>
               <div className="empty-state">
-                <p>暂无书签</p>
+                <p>{t('暂无书签')}</p>
               </div>
             </div>
           )}
@@ -1679,7 +1682,7 @@ function App() {
           {activeTab === 'profile' && (
             <div className="profile-content">
               <div className="profile-page-header">
-                <div className="profile-page-title">我</div>
+                <div className="profile-page-title">{t('我')}</div>
               </div>
               
               <div className="profile-card" onClick={() => {
@@ -1695,9 +1698,9 @@ function App() {
                   </div>
                 )}
                 <div className="profile-card-info">
-                  <div className="profile-card-name">{nickname || username || '未登录'}</div>
+                  <div className="profile-card-name">{nickname || username || t('未登录')}</div>
                   <div className="profile-card-id">Mutual ID: {username ? username.substring(0, 8) : 'mid_xxxxx'}</div>
-                  <div className="profile-card-bio">{localStorage.getItem('bio') || '点击编辑个人资料'}</div>
+                  <div className="profile-card-bio">{localStorage.getItem('bio') || t('点击编辑个人资料')}</div>
                 </div>
                 <div className="profile-card-right">
                   <div className="profile-card-qrcode">
@@ -1720,7 +1723,7 @@ function App() {
                       <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
                     </svg>
                   </div>
-                  <div className="profile-item-text">钱包</div>
+                  <div className="profile-item-text">{t('钱包')}</div>
                   <div className="profile-item-arrow">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                       <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
@@ -1733,7 +1736,7 @@ function App() {
                       <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                     </svg>
                   </div>
-                  <div className="profile-item-text">收藏</div>
+                  <div className="profile-item-text">{t('收藏')}</div>
                   <div className="profile-item-arrow">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                       <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
@@ -1746,7 +1749,7 @@ function App() {
                       <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
                     </svg>
                   </div>
-                  <div className="profile-item-text">朋友圈</div>
+                  <div className="profile-item-text">{t('朋友圈')}</div>
                   <div className="profile-item-arrow">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                       <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
@@ -1762,7 +1765,7 @@ function App() {
                       <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
                     </svg>
                   </div>
-                  <div className="profile-item-text">设置</div>
+                  <div className="profile-item-text">{t('设置')}</div>
                   <div className="profile-item-arrow">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                       <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
@@ -1781,30 +1784,30 @@ function App() {
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M10.25 3.75c-3.59 0-6.5 2.91-6.5 6.5s2.91 6.5 6.5 6.5c1.795 0 3.419-.726 4.596-1.904 1.178-1.177 1.904-2.801 1.904-4.596 0-3.59-2.91-6.5-6.5-6.5zm-8.5 6.5c0-4.694 3.806-8.5 8.5-8.5s8.5 3.806 8.5 8.5c0 1.986-.73 3.815-1.945 5.207l4.718 4.718-1.414 1.414-4.718-4.718C14.065 17.77 12.236 18.5 10.25 18.5c-4.694 0-8.5-3.806-8.5-8.5z"/>
           </svg>
-          <input type="text" placeholder="搜索" />
+          <input type="text" placeholder={t('搜索')} />
         </div>
 
         <div className="trends">
-          <h2>趋势</h2>
+          <h2>{t('趋势')}</h2>
           <div className="trend-item">
-            <div className="trend-category">技术 · 趋势</div>
+            <div className="trend-category">{t('技术 · 趋势')}</div>
             <div className="trend-name">#IPFS</div>
-            <div className="trend-count">12.5K 推文</div>
+            <div className="trend-count">12.5K {t('推文')}</div>
           </div>
           <div className="trend-item">
-            <div className="trend-category">科技 · 趋势</div>
+            <div className="trend-category">{t('科技 · 趋势')}</div>
             <div className="trend-name">#去中心化</div>
-            <div className="trend-count">8.3K 推文</div>
+            <div className="trend-count">8.3K {t('推文')}</div>
           </div>
           <div className="trend-item">
-            <div className="trend-category">区块链 · 趋势</div>
+            <div className="trend-category">{t('区块链 · 趋势')}</div>
             <div className="trend-name">#Web3</div>
-            <div className="trend-count">5.2K 推文</div>
+            <div className="trend-count">5.2K {t('推文')}</div>
           </div>
         </div>
 
         <div className="who-to-follow">
-          <h2>推荐关注</h2>
+          <h2>{t('推荐关注')}</h2>
           <div className="follow-item">
             <div className="follow-avatar">I</div>
             <div className="follow-info">
@@ -1845,13 +1848,13 @@ function App() {
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
           </svg>
-          <span>好友</span>
+          <span>{t('好友')}</span>
         </button>
         <button className={`mobile-nav-item ${activeTab === 'explore' ? 'active' : ''}`} onClick={() => setActiveTab('explore')} style={{ display: 'none' }}>
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 10.9c-.61 0-1.1.49-1.1 1.1s.49 1.1 1.1 1.1c.61 0 1.1-.49 1.1-1.1s-.49-1.1-1.1-1.1zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm2.19 12.19L6 18l3.81-8.19L18 6l-3.81 8.19z"/>
           </svg>
-          <span>发现</span>
+          <span>{t('发现')}</span>
         </button>
         <button className={`mobile-nav-item ${activeTab === 'bot' ? 'active' : ''}`} onClick={() => setActiveTab('bot')}>
           <svg viewBox="0 0 24 24" fill="currentColor">
@@ -1863,7 +1866,7 @@ function App() {
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
           </svg>
-          <span>我</span>
+          <span>{t('我')}</span>
         </button>
       </nav>
 
@@ -1876,19 +1879,19 @@ function App() {
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
             </button>
-            <div className="compose-page-title">发表文字</div>
+            <div className="compose-page-title">{t('发表文字')}</div>
             <button 
               onClick={postTweet} 
               disabled={loading || !content.trim()}
               className="post-btn"
             >
-              发表
+              {t('发表')}
             </button>
           </div>
           <div className="compose-page-content">
             <textarea
               className="compose-textarea"
-              placeholder="这一刻的想法..."
+              placeholder={t('这一刻的想法...')}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               maxLength={500}
@@ -1907,7 +1910,7 @@ function App() {
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
             </button>
-            <div className="profile-edit-title">个人信息</div>
+            <div className="profile-edit-title">{t('个人信息')}</div>
             <button 
               className="save-btn-header"
               onClick={() => {
@@ -1917,17 +1920,17 @@ function App() {
                   localStorage.setItem('bio', editBio);
                   setShowProfileEdit(false);
                 } else {
-                  alert('昵称不能为空');
+                  alert(t('昵称不能为空'));
                 }
               }}
             >
-              保存
+              {t('保存')}
             </button>
           </div>
 
           <div className="profile-edit-content">
             <div className="profile-edit-item avatar-edit-item" onClick={() => avatarInputRef.current?.click()}>
-              <div className="edit-label">头像</div>
+              <div className="edit-label">{t('头像')}</div>
               <div className="edit-avatar-wrapper">
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="avatar" className="edit-avatar-img" />
@@ -1961,13 +1964,13 @@ function App() {
             </div>
 
             <div className="profile-edit-item">
-              <div className="edit-label">昵称</div>
+              <div className="edit-label">{t('昵称')}</div>
               <input
                 type="text"
                 value={editUsername}
                 onChange={(e) => setEditUsername(e.target.value)}
                 className="edit-input"
-                placeholder="请输入昵称"
+                placeholder={t('请输入昵称')}
               />
             </div>
 
@@ -1977,13 +1980,13 @@ function App() {
             </div>
 
             <div className="profile-edit-item">
-              <div className="edit-label">个性签名</div>
+              <div className="edit-label">{t('个性签名')}</div>
               <input
                 type="text"
                 value={editBio}
                 onChange={(e) => setEditBio(e.target.value)}
                 className="edit-input"
-                placeholder="请输入个性签名"
+                placeholder={t('请输入个性签名')}
               />
             </div>
           </div>
@@ -2002,7 +2005,7 @@ function App() {
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
             </button>
-            <div className="friend-profile-title">详细资料</div>
+            <div className="friend-profile-title">{t('详细资料')}</div>
             <div className="header-placeholder"></div>
           </div>
 
@@ -2019,11 +2022,11 @@ function App() {
 
             <div className="friend-profile-section">
               <div className="friend-profile-item">
-                <div className="friend-item-label">来源</div>
-                <div className="friend-item-value">通过搜索添加</div>
+                <div className="friend-item-label">{t('来源')}</div>
+                <div className="friend-item-value">{t('通过搜索添加')}</div>
               </div>
               <div className="friend-profile-item">
-                <div className="friend-item-label">添加时间</div>
+                <div className="friend-item-label">{t('添加时间')}</div>
                 <div className="friend-item-value">{new Date().toLocaleDateString()}</div>
               </div>
             </div>
@@ -2040,13 +2043,13 @@ function App() {
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
                 </svg>
-                发消息
+                {t('发消息')}
               </button>
               <button 
                 className="friend-action-btn success"
                 onClick={() => {
                   if (groups.length === 0) {
-                    alert('请先创建群组');
+                    alert(t('请先创建群组'));
                     return;
                   }
                   const groupName = prompt(`选择要邀请 ${selectedFriend.username} 加入的群组:\n${groups.map(g => g.name).join('\n')}`);
@@ -2061,12 +2064,12 @@ function App() {
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
                 </svg>
-                邀请加入群组
+                {t('邀请加入群组')}
               </button>
               <button 
                 className="friend-action-btn danger"
                 onClick={() => {
-                  if (confirm(`确定要删除好友 ${selectedFriend.username} 吗？`)) {
+                  if (confirm(`${t('确定要删除好友')} ${selectedFriend.username} ${t('吗？')}`)) {
                     removeFriend(selectedFriend.username);
                     setShowFriendProfile(false);
                     setSelectedFriend(null);
@@ -2076,7 +2079,7 @@ function App() {
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                 </svg>
-                删除好友
+                {t('删除好友')}
               </button>
             </div>
           </div>
@@ -2096,7 +2099,7 @@ function App() {
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
             </button>
-            <div className="friend-profile-title">群组信息</div>
+            <div className="friend-profile-title">{t('群组信息')}</div>
             <div className="header-placeholder"></div>
           </div>
 
@@ -2104,7 +2107,7 @@ function App() {
             <div className="friend-profile-card">
               <div className="friend-profile-avatar" style={{ position: 'relative' }}>
                 {selectedGroup.avatar ? (
-                  <img src={selectedGroup.avatar} alt="群头像" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  <img src={selectedGroup.avatar} alt={t('群头像')} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                 ) : (
                   getInitial(selectedGroup.name)
                 )}
@@ -2154,7 +2157,7 @@ function App() {
                     justifyContent: 'center',
                     color: '#fff',
                     fontSize: 12
-                  }}>上传中...</div>
+                  }}>{t('上传中...')}</div>
                 )}
               </div>
               <div className="friend-profile-info">
@@ -2176,11 +2179,11 @@ function App() {
                     <button 
                       onClick={() => updateGroupName(selectedGroup.id, newGroupName)}
                       style={{ padding: '4px 12px', background: '#07c160', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                    >保存</button>
+                    >{t('保存')}</button>
                     <button 
                       onClick={() => { setEditingGroupName(false); setNewGroupName(''); }}
                       style={{ padding: '4px 12px', background: '#eee', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                    >取消</button>
+                    >{t('取消')}</button>
                   </div>
                 ) : (
                   <div className="friend-profile-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2197,23 +2200,23 @@ function App() {
                     )}
                   </div>
                 )}
-                <div className="friend-profile-id">{selectedGroup.members ? selectedGroup.members.length : 0} 成员</div>
+                <div className="friend-profile-id">{selectedGroup.members ? selectedGroup.members.length : 0} {t('成员')}</div>
               </div>
             </div>
 
             <div className="friend-profile-section">
               <div className="friend-profile-item">
-                <div className="friend-item-label">创建者</div>
+                <div className="friend-item-label">{t('创建者')}</div>
                 <div className="friend-item-value">{selectedGroup.creator}</div>
               </div>
               <div className="friend-profile-item">
-                <div className="friend-item-label">创建时间</div>
+                <div className="friend-item-label">{t('创建时间')}</div>
                 <div className="friend-item-value">{selectedGroup.createdAt ? new Date(selectedGroup.createdAt).toLocaleDateString() : '-'}</div>
               </div>
             </div>
 
             <div className="friend-profile-section">
-              <div className="friend-item-label">群组成员</div>
+              <div className="friend-item-label">{t('群组成员')}</div>
               {selectedGroup.members && selectedGroup.members.map(member => (
                 <div key={member} className="group-member-item">
                   <div className="group-member-avatar">
@@ -2221,7 +2224,7 @@ function App() {
                   </div>
                   <div className="group-member-name">{member}</div>
                   {member === selectedGroup.creator && (
-                    <div className="group-member-badge">群主</div>
+                    <div className="group-member-badge">{t('群主')}</div>
                   )}
                 </div>
               ))}
@@ -2231,23 +2234,19 @@ function App() {
               <button 
                 className="friend-action-btn success"
                 onClick={() => {
+                  console.log('邀请好友按钮点击, friends:', friends.length);
                   if (friends.length === 0) {
-                    alert('请先添加好友');
+                    alert(t('请先添加好友'));
                     return;
                   }
-                  const friendName = prompt(`选择要邀请的好友:\n${friends.map(f => f.username).join('\n')}`);
-                  if (friendName) {
-                    const friend = friends.find(f => f.username === friendName);
-                    if (friend) {
-                      inviteToGroup(friend.username, selectedGroup.id);
-                    }
-                  }
+                  console.log('设置 showInviteFriend 为 true');
+                  setShowInviteFriend(true);
                 }}
               >
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                 </svg>
-                邀请好友
+                {t('邀请好友')}
               </button>
               <button 
                 className="friend-action-btn primary"
@@ -2260,9 +2259,94 @@ function App() {
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
                 </svg>
-                进入群聊
+                {t('进入群聊')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 邀请好友到群组 */}
+      {showInviteFriend && selectedGroup && (
+        <div className="create-group-page" style={{ zIndex: 300 }}>
+          <div className="create-group-header">
+            <button className="back-btn" onClick={() => setShowInviteFriend(false)}>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+              </svg>
+            </button>
+            <div className="create-group-title">{t('邀请好友到群组')}</div>
+            <div className="header-placeholder"></div>
+          </div>
+
+          <div className="create-group-content">
+            {friends.length === 0 ? (
+              <div className="empty-state">
+                <p>{t('暂无好友可邀请')}</p>
+              </div>
+            ) : (
+              <>
+                <div className="friend-list">
+                  {friends.filter(f => !selectedGroup.members?.includes(f.username)).map(friend => (
+                    <div 
+                      key={friend.username}
+                      className={`friend-item ${selectedFriendsForGroup.includes(friend.username) ? 'selected' : ''}`}
+                      onClick={() => {
+                        if (selectedFriendsForGroup.includes(friend.username)) {
+                          setSelectedFriendsForGroup(selectedFriendsForGroup.filter(u => u !== friend.username));
+                        } else {
+                          setSelectedFriendsForGroup([...selectedFriendsForGroup, friend.username]);
+                        }
+                      }}
+                    >
+                      <div className="friend-avatar">
+                        {getInitial(friend.username)}
+                      </div>
+                      <div className="friend-info">
+                        <div className="friend-name">{friend.username}</div>
+                      </div>
+                      {selectedFriendsForGroup.includes(friend.username) && (
+                        <div className="friend-check">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="create-group-footer">
+                  <div className="selected-count">
+                    {t('已选择')} {selectedFriendsForGroup.length} {t('人')}
+                  </div>
+                  <div className="footer-buttons">
+                    {selectedFriendsForGroup.length > 0 && (
+                      <button 
+                        className="cancel-btn"
+                        onClick={() => setSelectedFriendsForGroup([])}
+                      >
+                        {t('取消选择')}
+                      </button>
+                    )}
+                    <button 
+                      className="create-btn"
+                      disabled={selectedFriendsForGroup.length === 0}
+                      onClick={() => {
+                        selectedFriendsForGroup.forEach(friendUsername => {
+                          inviteToGroup(friendUsername, selectedGroup.id);
+                        });
+                        setSelectedFriendsForGroup([]);
+                        setShowInviteFriend(false);
+                        alert(t('已邀请'));
+                      }}
+                    >
+                      {t('邀请')}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -2276,14 +2360,14 @@ function App() {
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
             </button>
-            <div className="settings-title">设置</div>
+            <div className="settings-title">{t('设置')}</div>
             <div className="header-placeholder"></div>
           </div>
 
           <div className="settings-content">
             <div className="settings-section">
               <div className="settings-item">
-                <div className="settings-item-text">账号与安全</div>
+                <div className="settings-item-text">{t('账号与安全')}</div>
                 <div className="settings-item-arrow">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
@@ -2294,7 +2378,7 @@ function App() {
 
             <div className="settings-section">
               <div className="settings-item">
-                <div className="settings-item-text">新消息通知</div>
+                <div className="settings-item-text">{t('新消息通知')}</div>
                 <div className="settings-item-arrow">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
@@ -2302,7 +2386,7 @@ function App() {
                 </div>
               </div>
               <div className="settings-item">
-                <div className="settings-item-text">隐私</div>
+                <div className="settings-item-text">{t('隐私')}</div>
                 <div className="settings-item-arrow">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
@@ -2310,7 +2394,7 @@ function App() {
                 </div>
               </div>
               <div className="settings-item">
-                <div className="settings-item-text">通用</div>
+                <div className="settings-item-text">{t('通用')}</div>
                 <div className="settings-item-arrow">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
@@ -2318,9 +2402,9 @@ function App() {
                 </div>
               </div>
               <div className="settings-item" onClick={() => setShowLanguageSelect(true)}>
-                <div className="settings-item-text">语言</div>
+                <div className="settings-item-text">{t('语言')}</div>
                 <div className="settings-item-value">
-                  {language === 'zh' ? '中文' : language === 'en' ? 'English' : language === 'ja' ? '日本語' : language === 'fr' ? 'Français' : language === 'de' ? 'Deutsch' : '中文'}
+                  {i18n.language === 'zh' ? '中文' : i18n.language === 'en' ? 'English' : i18n.language === 'ja' ? '日本語' : i18n.language === 'fr' ? 'Français' : i18n.language === 'de' ? 'Deutsch' : '中文'}
                 </div>
                 <div className="settings-item-arrow">
                   <svg viewBox="0 0 24 24" fill="currentColor">
@@ -2332,7 +2416,7 @@ function App() {
 
             <div className="settings-section">
               <div className="settings-item">
-                <div className="settings-item-text">帮助与反馈</div>
+                <div className="settings-item-text">{t('帮助与反馈')}</div>
                 <div className="settings-item-arrow">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
@@ -2340,7 +2424,7 @@ function App() {
                 </div>
               </div>
               <div className="settings-item">
-                <div className="settings-item-text">关于Mutual</div>
+                <div className="settings-item-text">{t('关于Mutual')}</div>
                 <div className="settings-item-arrow">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41L14.17 12l4.58-4.59L10 6z"/>
@@ -2356,7 +2440,7 @@ function App() {
                 setIsLoggedIn(false);
                 setShowSettings(false);
               }}>
-                <div className="settings-item-text logout-text">退出登录</div>
+                <div className="settings-item-text logout-text">{t('退出登录')}</div>
               </div>
             </div>
           </div>
@@ -2372,7 +2456,7 @@ function App() {
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
             </button>
-            <div className="wallet-page-title">钱包</div>
+            <div className="wallet-page-title">{t('钱包')}</div>
             <div className="header-placeholder"></div>
           </div>
           <div className="wallet-page-content">
@@ -2390,7 +2474,7 @@ function App() {
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
             </button>
-            <div className="add-friend-title">添加朋友</div>
+            <div className="add-friend-title">{t('添加朋友')}</div>
             <div className="header-placeholder"></div>
           </div>
 
@@ -2423,20 +2507,20 @@ function App() {
                       
                       if (data.exists) {
                         setSearchResult({ username: friendUsername });
-                        alert(`用户 ${friendUsername} 已找到`);
+                        alert(`${t('用户')} ${friendUsername} ${t('已找到')}`);
                       } else {
                         setSearchResult(null);
-                        alert(`用户 ${friendUsername} 不存在`);
+                        alert(`${t('用户')} ${friendUsername} ${t('不存在')}`);
                       }
                     } catch (error) {
                       console.error('搜索用户失败:', error);
                       setSearchResult(null);
-                      alert('搜索用户失败');
+                      alert(t('搜索用户失败'));
                     }
                   }
                 }}
               >
-                搜索
+                {t('搜索')}
               </button>
             </div>
 
@@ -2447,14 +2531,14 @@ function App() {
                     <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
                   </svg>
                 </div>
-                <div className="method-text">Mutual联系人</div>
-                <div className="method-desc">通过Mutual添加</div>
+                <div className="method-text">{t('Mutual联系人')}</div>
+                <div className="method-desc">{t('通过Mutual添加')}</div>
               </div>
             </div>
 
             {searchResult && (
               <div className="search-result">
-                <div className="result-header">搜索结果</div>
+                <div className="result-header">{t('搜索结果')}</div>
                 <div className="result-item">
                   <div 
                     className="result-avatar"
@@ -2489,7 +2573,7 @@ function App() {
                         setShowAddFriend(false);
                       }}
                     >
-                      查看资料
+                      {t('查看资料')}
                     </button>
                     <button 
                       className="add-btn"
@@ -2498,7 +2582,7 @@ function App() {
                         addFriend();
                       }}
                     >
-                      添加好友
+                      {t('添加好友')}
                     </button>
                   </div>
                 </div>
@@ -2521,7 +2605,7 @@ function App() {
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
             </button>
-            <div className="add-friend-title">创建群组</div>
+            <div className="add-friend-title">{t('创建群组')}</div>
             <div className="header-placeholder"></div>
           </div>
 
@@ -2530,7 +2614,7 @@ function App() {
               <div className="search-box">
                 <input
                   type="text"
-                  placeholder="群组名称"
+                  placeholder={t('群组名称')}
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
                   className="search-input-friend"
@@ -2539,9 +2623,9 @@ function App() {
             </div>
 
             <div className="group-members-section">
-              <div className="group-members-title">选择成员</div>
+              <div className="group-members-title">{t('选择成员')}</div>
               <div className="group-members-count">
-                已选择 {selectedFriendsForGroup.length} 人
+                {t('已选择')} {selectedFriendsForGroup.length} {t('人')}
               </div>
             </div>
 
@@ -2581,7 +2665,7 @@ function App() {
                 onClick={createGroup}
                 disabled={!groupName.trim() || selectedFriendsForGroup.length === 0}
               >
-                创建群组 ({selectedFriendsForGroup.length + 1}人)
+                {t('创建群组')} ({selectedFriendsForGroup.length + 1}{t('人')})
               </button>
             </div>
           </div>
@@ -2597,18 +2681,18 @@ function App() {
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
             </button>
-            <div className="language-select-title">语言</div>
+            <div className="language-select-title">{t('语言')}</div>
             <div className="header-placeholder"></div>
           </div>
 
           <div className="language-select-content">
             <div className="language-item" onClick={() => {
-              setLanguage('zh');
+              i18n.changeLanguage('zh');
               localStorage.setItem('language', 'zh');
               setShowLanguageSelect(false);
             }}>
               <div className="language-name">中文</div>
-              {language === 'zh' && (
+              {i18n.language === 'zh' && (
                 <div className="language-check">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
@@ -2617,12 +2701,12 @@ function App() {
               )}
             </div>
             <div className="language-item" onClick={() => {
-              setLanguage('en');
+              i18n.changeLanguage('en');
               localStorage.setItem('language', 'en');
               setShowLanguageSelect(false);
             }}>
               <div className="language-name">English</div>
-              {language === 'en' && (
+              {i18n.language === 'en' && (
                 <div className="language-check">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
@@ -2631,12 +2715,12 @@ function App() {
               )}
             </div>
             <div className="language-item" onClick={() => {
-              setLanguage('ja');
+              i18n.changeLanguage('ja');
               localStorage.setItem('language', 'ja');
               setShowLanguageSelect(false);
             }}>
               <div className="language-name">日本語</div>
-              {language === 'ja' && (
+              {i18n.language === 'ja' && (
                 <div className="language-check">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
@@ -2645,12 +2729,12 @@ function App() {
               )}
             </div>
             <div className="language-item" onClick={() => {
-              setLanguage('fr');
+              i18n.changeLanguage('fr');
               localStorage.setItem('language', 'fr');
               setShowLanguageSelect(false);
             }}>
               <div className="language-name">Français</div>
-              {language === 'fr' && (
+              {i18n.language === 'fr' && (
                 <div className="language-check">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
@@ -2659,12 +2743,12 @@ function App() {
               )}
             </div>
             <div className="language-item" onClick={() => {
-              setLanguage('de');
+              i18n.changeLanguage('de');
               localStorage.setItem('language', 'de');
               setShowLanguageSelect(false);
             }}>
               <div className="language-name">Deutsch</div>
-              {language === 'de' && (
+              {i18n.language === 'de' && (
                 <div className="language-check">
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
@@ -2685,14 +2769,14 @@ function App() {
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
               </svg>
             </button>
-            <div className="friend-requests-title">好友申请</div>
+            <div className="friend-requests-title">{t('好友申请')}</div>
             <div className="header-placeholder"></div>
           </div>
 
           <div className="friend-requests-content">
             {friendRequests.length === 0 ? (
               <div className="empty-state">
-                <p>暂无好友申请</p>
+                <p>{t('暂无好友申请')}</p>
               </div>
             ) : (
               friendRequests.map(request => (
@@ -2702,7 +2786,7 @@ function App() {
                   </div>
                   <div className="request-info">
                     <div className="request-name">{request.from}</div>
-                    <div className="request-message">{request.message || '请求添加您为好友'}</div>
+                    <div className="request-message">{request.message || t('请求添加您为好友')}</div>
                     <div className="request-time">{formatDate(request.createdAt)}</div>
                   </div>
                   <div className="request-actions">
@@ -2710,13 +2794,13 @@ function App() {
                       className="request-action-btn accept-btn"
                       onClick={() => respondToFriendRequest(request.id, 'accept')}
                     >
-                      接受
+                      {t('接受')}
                     </button>
                     <button 
                       className="request-action-btn reject-btn"
                       onClick={() => respondToFriendRequest(request.id, 'reject')}
                     >
-                      拒绝
+                      {t('拒绝')}
                     </button>
                   </div>
                 </div>

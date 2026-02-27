@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ipfs-social</string>
-    <string name="title_activity_main">ipfs-social</string>
+    <string name="app_name">Mutual</string>
+    <string name="title_activity_main">Mutual</string>
     <string name="package_name">com.ipfssocial.app</string>
     <string name="custom_url_scheme">com.ipfssocial.app</string>
 </resources>
