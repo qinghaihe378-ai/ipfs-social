@@ -37,6 +37,9 @@ function App() {
   const [groupName, setGroupName] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [editingGroupName, setEditingGroupName] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [uploadingGroupAvatar, setUploadingGroupAvatar] = useState(false);
   const [selectedFriendsForGroup, setSelectedFriendsForGroup] = useState([]);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [language, setLanguage] = useState(localStorage.getItem('language') || 'zh');
@@ -566,7 +569,12 @@ function App() {
       const response = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(username)}`);
       const data = await response.json();
       if (data.success && data.groups) {
-        setGroups(data.groups);
+        const savedAvatars = JSON.parse(localStorage.getItem('groupAvatars') || '{}');
+        const groupsWithAvatars = data.groups.map(g => ({
+          ...g,
+          avatar: savedAvatars[g.id] || g.avatar || null
+        }));
+        setGroups(groupsWithAvatars);
       }
     } catch (error) {
       console.error('加载群组失败:', error);
@@ -689,6 +697,38 @@ function App() {
     ).sort((a, b) => a.timestamp - b.timestamp);
   };
 
+  const getUnreadCount = (chatId) => {
+    const chatMessages = getChatMessages(chatId);
+    return chatMessages.filter(msg => msg.from !== username && !msg.read).length;
+  };
+
+  const markAsRead = (chatId) => {
+    const chatMessages = getChatMessages(chatId);
+    const unreadMessages = chatMessages.filter(msg => msg.from !== username && !msg.read);
+    
+    if (unreadMessages.length > 0) {
+      const updatedMessages = messages.map(msg => {
+        if (msg.from !== username && !msg.read) {
+          const isGroup = chatId.startsWith('group:');
+          if (isGroup) {
+            const groupId = chatId.replace('group:', '');
+            if (msg.groupId === groupId || msg.to === `group:${groupId}`) {
+              return { ...msg, read: true };
+            }
+          } else {
+            if ((msg.from === chatId && msg.to === username)) {
+              return { ...msg, read: true };
+            }
+          }
+        }
+        return msg;
+      });
+      
+      setMessages(updatedMessages);
+      localStorage.setItem('messages', JSON.stringify(updatedMessages));
+    }
+  };
+
   const createGroup = async () => {
     if (!groupName.trim()) {
       alert('请输入群组名称');
@@ -746,6 +786,67 @@ function App() {
     } catch (error) {
       console.error('发送群消息失败:', error);
       alert('发送群消息失败');
+    }
+  };
+
+  const updateGroupName = async (groupId, newName) => {
+    if (!newName.trim()) {
+      alert('群名称不能为空');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/groups/${groupId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newName,
+          username
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setGroups(groups.map(g => g.id === groupId ? data.group : g));
+        setSelectedGroup(data.group);
+        setEditingGroupName(false);
+        alert('群名称修改成功！');
+      } else {
+        alert(data.error || '修改失败');
+      }
+    } catch (error) {
+      console.error('更新群名称失败:', error);
+      alert('更新群名称失败');
+    }
+  };
+
+  const uploadGroupAvatar = async (file, groupId) => {
+    setUploadingGroupAvatar(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const fileData = e.target.result;
+        
+        const avatarUrl = fileData;
+        
+        const savedAvatars = JSON.parse(localStorage.getItem('groupAvatars') || '{}');
+        savedAvatars[groupId] = avatarUrl;
+        localStorage.setItem('groupAvatars', JSON.stringify(savedAvatars));
+        
+        const updatedGroups = groups.map(g => 
+          g.id === groupId ? { ...g, avatar: avatarUrl } : g
+        );
+        setGroups(updatedGroups);
+        setSelectedGroup({ ...selectedGroup, avatar: avatarUrl });
+        alert('群头像设置成功！');
+        setUploadingGroupAvatar(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('设置群头像失败:', error);
+      alert('设置群头像失败');
+      setUploadingGroupAvatar(false);
     }
   };
 
@@ -1217,7 +1318,7 @@ function App() {
                   </div>
                 </div>
                 
-                {groups.length > 0 && (
+                {groups && groups.length > 0 && (
                   <>
                     {groups.map(group => (
                       <div 
@@ -1234,14 +1335,14 @@ function App() {
                         </div>
                         <div className="contact-info">
                           <div className="contact-name">{group.name}</div>
-                          <div className="contact-subtitle">{group.members.length} 成员</div>
+                          <div className="contact-subtitle">{group.members ? group.members.length : 0} 成员</div>
                         </div>
                       </div>
                     ))}
                   </>
                 )}
                 
-                {friends.length > 0 && (
+                {friends && friends.length > 0 && (
                   <>
                     {Object.entries(
                       friends
@@ -1337,26 +1438,51 @@ function App() {
                     </button>
                   </div>
                   <div className="messages-list">
-                    {friends.length === 0 ? (
+                    {friends.length === 0 && groups.length === 0 ? (
                       <div className="empty-state">
                         <p>暂无好友，点击右上角添加好友</p>
                       </div>
                     ) : (
-                      friends.map(friend => (
-                        <div key={friend.username} className="message-item" onClick={() => setSelectedChat(friend.username)}>
-                          <div className="message-avatar">
-                            {getInitial(friend.username)}
-                          </div>
-                          <div className="message-info">
-                            <div className="message-name">{friend.username}</div>
-                            <div className="message-preview">
-                              {getChatMessages(friend.username).length > 0
-                                ? getChatMessages(friend.username)[getChatMessages(friend.username).length - 1].content
-                                : '暂无消息'}
+                      <>
+                        {groups && groups.map(group => {
+                          const unreadCount = getUnreadCount(`group:${group.id}`);
+                          return (
+                          <div key={group.id} className="message-item" onClick={() => { setSelectedChat(`group:${group.id}`); markAsRead(`group:${group.id}`); }}>
+                            <div className="message-avatar">
+                              {getInitial(group.name)}
+                              {unreadCount > 0 && <div className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</div>}
+                            </div>
+                            <div className="message-info">
+                              <div className="message-name">{group.name}</div>
+                              <div className="message-preview">
+                                {getChatMessages(`group:${group.id}`).length > 0
+                                  ? getChatMessages(`group:${group.id}`)[getChatMessages(`group:${group.id}`).length - 1].content
+                                  : '暂无消息'}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))
+                          );
+                        })}
+                        {friends && friends.map(friend => {
+                          const unreadCount = getUnreadCount(friend.username);
+                          return (
+                          <div key={friend.username} className="message-item" onClick={() => { setSelectedChat(friend.username); markAsRead(friend.username); }}>
+                            <div className="message-avatar">
+                              {getInitial(friend.username)}
+                              {unreadCount > 0 && <div className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</div>}
+                            </div>
+                            <div className="message-info">
+                              <div className="message-name">{friend.username}</div>
+                              <div className="message-preview">
+                                {getChatMessages(friend.username).length > 0
+                                  ? getChatMessages(friend.username)[getChatMessages(friend.username).length - 1].content
+                                  : '暂无消息'}
+                              </div>
+                            </div>
+                          </div>
+                          );
+                        })}
+                      </>
                     )}
                   </div>
                 </>
@@ -1928,6 +2054,7 @@ function App() {
             <button className="back-btn" onClick={() => {
               setShowGroupInfo(false);
               setSelectedGroup(null);
+              setEditingGroupName(false);
             }}>
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
@@ -1939,12 +2066,102 @@ function App() {
 
           <div className="friend-profile-content">
             <div className="friend-profile-card">
-              <div className="friend-profile-avatar">
-                {getInitial(selectedGroup.name)}
+              <div className="friend-profile-avatar" style={{ position: 'relative' }}>
+                {selectedGroup.avatar ? (
+                  <img src={selectedGroup.avatar} alt="群头像" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  getInitial(selectedGroup.name)
+                )}
+                {selectedGroup.creator === username && (
+                  <label className="avatar-upload-btn" style={{
+                    position: 'absolute',
+                    bottom: -5,
+                    right: -5,
+                    width: 28,
+                    height: 28,
+                    background: '#7c3aed',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    border: '2px solid #fff'
+                  }}>
+                    <svg viewBox="0 0 24 24" fill="white" width="14" height="14">
+                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    </svg>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          uploadGroupAvatar(file, selectedGroup.id);
+                        }
+                      }}
+                      disabled={uploadingGroupAvatar}
+                    />
+                  </label>
+                )}
+                {uploadingGroupAvatar && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontSize: 12
+                  }}>上传中...</div>
+                )}
               </div>
               <div className="friend-profile-info">
-                <div className="friend-profile-name">{selectedGroup.name}</div>
-                <div className="friend-profile-id">{selectedGroup.members.length} 成员</div>
+                {editingGroupName ? (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input 
+                      type="text"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      style={{ 
+                        fontSize: 18, 
+                        fontWeight: 600,
+                        padding: '4px 8px',
+                        borderRadius: 4,
+                        border: '1px solid #ddd'
+                      }}
+                      autoFocus
+                    />
+                    <button 
+                      onClick={() => updateGroupName(selectedGroup.id, newGroupName)}
+                      style={{ padding: '4px 12px', background: '#07c160', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                    >保存</button>
+                    <button 
+                      onClick={() => { setEditingGroupName(false); setNewGroupName(''); }}
+                      style={{ padding: '4px 12px', background: '#eee', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                    >取消</button>
+                  </div>
+                ) : (
+                  <div className="friend-profile-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {selectedGroup.name}
+                    {selectedGroup.creator === username && (
+                      <button 
+                        onClick={() => { setEditingGroupName(true); setNewGroupName(selectedGroup.name); }}
+                        style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer' }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="#999" width="16" height="16">
+                          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="friend-profile-id">{selectedGroup.members ? selectedGroup.members.length : 0} 成员</div>
               </div>
             </div>
 
@@ -1955,13 +2172,13 @@ function App() {
               </div>
               <div className="friend-profile-item">
                 <div className="friend-item-label">创建时间</div>
-                <div className="friend-item-value">{new Date(selectedGroup.createdAt).toLocaleDateString()}</div>
+                <div className="friend-item-value">{selectedGroup.createdAt ? new Date(selectedGroup.createdAt).toLocaleDateString() : '-'}</div>
               </div>
             </div>
 
             <div className="friend-profile-section">
               <div className="friend-item-label">群组成员</div>
-              {selectedGroup.members.map(member => (
+              {selectedGroup.members && selectedGroup.members.map(member => (
                 <div key={member} className="group-member-item">
                   <div className="group-member-avatar">
                     {getInitial(member)}

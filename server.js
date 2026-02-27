@@ -299,29 +299,54 @@ app.get('/api/offline-messages/:username', async (req, res) => {
     let messagesList = [];
     
     if (supabase) {
-      // 获取用户所在的所有群组
+      // 获取用户所在的所有群组 (通过group_members表)
       const { data: userGroups, error: groupsError } = await supabase
-        .from('groups')
-        .select('id')
-        .contains('members', [username]);
+        .from('group_members')
+        .select('group_id')
+        .eq('username', username);
 
-      const groupIds = (userGroups || []).map(g => `group:${g.id}`);
+      const groupIds = (userGroups || []).map(g => `group:${g.group_id}`);
 
       // 获取私聊消息和群组消息
-      const { data: dbMessages, error } = await supabase
+      let query = supabase
         .from('messages')
         .select('*')
-        .or(`to_user.eq.${username},to_user.in.(${groupIds.join(',')})`)
-        .order('timestamp', { ascending: true });
-
-      if (error) {
-        console.warn('获取离线消息失败:', error.message);
+        .eq('to_user', username);
+      
+      // 如果有群组，也获取群消息
+      if (groupIds.length > 0) {
+        const { data: dbMessages, error } = await supabase
+          .from('messages')
+          .select('*')
+          .or(`to_user.eq.${username},to_user.in.(${groupIds.join(',')})`)
+          .order('timestamp', { ascending: true });
+        
+        if (error) {
+          console.warn('获取离线消息失败:', error.message);
+        } else {
+          messagesList = (dbMessages || []).map(m => ({
+            ...m,
+            from: m.from_user,
+            to: m.to_user
+          }));
+        }
       } else {
-        messagesList = (dbMessages || []).map(m => ({
-          ...m,
-          from: m.from_user,
-          to: m.to_user
-        }));
+        // 没有群组，只获取私聊消息
+        const { data: dbMessages, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('to_user', username)
+          .order('timestamp', { ascending: true });
+        
+        if (error) {
+          console.warn('获取离线消息失败:', error.message);
+        } else {
+          messagesList = (dbMessages || []).map(m => ({
+            ...m,
+            from: m.from_user,
+            to: m.to_user
+          }));
+        }
       }
     } else {
       // 从内存中获取消息
@@ -764,7 +789,19 @@ app.get('/api/groups/:username', async (req, res) => {
           if (error) {
             console.warn('获取群组失败:', error.message);
           } else {
-            groupsList = dbGroups || [];
+            // 获取每个群组的成员列表
+            groupsList = await Promise.all((dbGroups || []).map(async (g) => {
+              const { data: members } = await supabase
+                .from('group_members')
+                .select('username')
+                .eq('group_id', g.group_id);
+              
+              return {
+                ...g,
+                id: g.group_id,
+                members: (members || []).map(m => m.username)
+              };
+            }));
           }
         }
       }
@@ -772,7 +809,7 @@ app.get('/api/groups/:username', async (req, res) => {
 
     if (groupsList.length === 0) {
       groupsList = Array.from(groups.values()).filter(g => 
-        g.members.includes(username)
+        g.members && g.members.includes(username)
       );
     }
 
@@ -794,16 +831,38 @@ app.post('/api/send-group-message', async (req, res) => {
       return res.status(400).json({ error: '缺少必要字段' });
     }
 
-    const group = groups.get(groupId);
-    if (!group) {
-      return res.status(404).json({ error: '群组不存在' });
+    let groupName = '群组';
+    let groupMembers = [];
+
+    if (supabase) {
+      const { data: groupData } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('group_id', groupId)
+        .single();
+      
+      if (groupData) {
+        groupName = groupData.name;
+        const { data: members } = await supabase
+          .from('group_members')
+          .select('username')
+          .eq('group_id', groupId);
+        groupMembers = (members || []).map(m => m.username);
+      }
+    } else {
+      const group = groups.get(groupId);
+      if (!group) {
+        return res.status(404).json({ error: '群组不存在' });
+      }
+      groupName = group.name;
+      groupMembers = group.members || [];
     }
 
     const message = {
       id: Math.floor(Math.random() * 10000000),
       from,
       groupId,
-      groupName: group.name,
+      groupName,
       content,
       timestamp: timestamp || Date.now(),
       type: 'group'
@@ -872,6 +931,119 @@ app.get('/api/group-messages/:groupId', async (req, res) => {
     });
   } catch (error) {
     console.error('获取群消息错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/groups/:groupId', async (req, res) => {
+  const { groupId } = req.params;
+  const { name, avatar, username } = req.body;
+  
+  if (!username) {
+    return res.status(400).json({ error: '缺少用户名' });
+  }
+
+  try {
+    if (supabase) {
+      const { data: group, error: groupError } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('group_id', groupId)
+        .single();
+
+      if (groupError || !group) {
+        return res.status(404).json({ error: '群组不存在' });
+      }
+
+      if (group.creator !== username) {
+        return res.status(403).json({ error: '只有群主才能修改群资料' });
+      }
+
+      const updateData = {};
+      if (name) updateData.name = name;
+      if (avatar) updateData.avatar = avatar;
+
+      const { data: updatedGroup, error: updateError } = await supabase
+        .from('groups')
+        .update(updateData)
+        .eq('group_id', groupId)
+        .select()
+        .single();
+
+      if (updateError) {
+        return res.status(500).json({ error: updateError.message });
+      }
+
+      const { data: members } = await supabase
+        .from('group_members')
+        .select('username')
+        .eq('group_id', groupId);
+
+      res.json({ 
+        success: true, 
+        group: {
+          ...updatedGroup,
+          id: updatedGroup.group_id,
+          members: (members || []).map(m => m.username)
+        }
+      });
+    } else {
+      const group = groups.get(groupId);
+      if (!group) {
+        return res.status(404).json({ error: '群组不存在' });
+      }
+
+      if (group.creator !== username) {
+        return res.status(403).json({ error: '只有群主才能修改群资料' });
+      }
+
+      if (name) group.name = name;
+      if (avatar) group.avatar = avatar;
+
+      res.json({ success: true, group });
+    }
+  } catch (error) {
+    console.error('更新群组错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/upload-group-avatar', async (req, res) => {
+  try {
+    const { fileData, fileName, fileType, groupId, username } = req.body;
+    
+    if (!fileData || !fileName || !groupId || !username) {
+      return res.status(400).json({ error: '缺少必要字段' });
+    }
+
+    if (supabase) {
+      const { data: group } = await supabase
+        .from('groups')
+        .select('creator')
+        .eq('group_id', groupId)
+        .single();
+
+      if (!group || group.creator !== username) {
+        return res.status(403).json({ error: '只有群主才能上传群头像' });
+      }
+    }
+
+    const cid = await ipfsAdd(fileData);
+    
+    if (supabase) {
+      await supabase
+        .from('groups')
+        .update({ avatar: cid })
+        .eq('group_id', groupId);
+    }
+
+    res.json({ 
+      success: true, 
+      cid,
+      url: `https://ipfs.io/ipfs/${cid}`
+    });
+  } catch (error) {
+    console.error('上传群头像错误:', error);
     res.status(500).json({ error: error.message });
   }
 });
