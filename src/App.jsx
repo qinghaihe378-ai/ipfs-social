@@ -503,6 +503,8 @@ function App() {
           // 从服务器同步好友列表
           await syncFriendsFromServer();
           alert('已添加好友！');
+        } else {
+          alert('已拒绝好友申请');
         }
         // 更新好友申请列表
         setFriendRequests(prev => prev.filter(req => req.id !== requestId));

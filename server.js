@@ -523,10 +523,16 @@ app.post('/api/respond-friend-request', async (req, res) => {
       }
     }
 
+    let newFriends = [];
+    if (action === 'accept') {
+      newFriends = [request.from];
+    }
+
     res.json({ 
       success: true, 
       action, 
-      request 
+      request,
+      newFriends
     });
   } catch (error) {
     console.error('响应好友申请错误:', error);
