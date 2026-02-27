@@ -25,12 +25,16 @@ console.log('Supabase连接状态:', supabase ? '已配置' : '未配置');
 console.log('IPFS功能: 在Railway环境中暂时禁用');
 
 app.get('/api/health', (req, res) => {
+  console.log('健康检查请求:', new Date().toISOString());
   res.json({ 
     status: 'ok', 
     ipfsConnected: false,
+    timestamp: Date.now(),
     env: {
       supabaseUrl: process.env.SUPABASE_URL ? 'set' : 'not set',
-      supabaseAnonKey: process.env.SUPABASE_ANON_KEY ? 'set' : 'not set'
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY ? 'set' : 'not set',
+      port: process.env.PORT || 3001,
+      nodeEnv: process.env.NODE_ENV || 'development'
     }
   });
 });
