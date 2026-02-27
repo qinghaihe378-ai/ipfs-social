@@ -24,7 +24,7 @@ async function initIPFS() {
   try {
     ipfs = await create({ 
       url: process.env.IPFS_URL || 'http://localhost:5001/api/v0',
-      timeout: 10000
+      timeout: 5000
     });
     console.log('IPFS 节点已连接');
     
@@ -100,7 +100,6 @@ app.post('/api/check-user-online', async (req, res) => {
     return res.status(400).json({ error: '缺少用户名' });
   }
 
-  // 检查用户是否存在于数据库中
   try {
     if (!supabase) {
       return res.json({ 
@@ -119,7 +118,6 @@ app.post('/api/check-user-online', async (req, res) => {
 
     const userExists = !error && existingUser !== null;
     
-    // 检查用户是否在线
     const user = onlineUsers.get(username);
     const isOnline = user && (Date.now() - user.lastSeen) < 60000;
 
@@ -195,7 +193,6 @@ app.get('/api/subscribe-messages/:username', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  // 定期发送 ping 以保持连接
   const interval = setInterval(() => {
     try {
       res.write('data: {"type": "ping"}\n\n');
@@ -536,7 +533,6 @@ app.get('/api/subscribe', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  // 定期发送 ping 以保持连接
   const interval = setInterval(() => {
     try {
       res.write('data: {"type": "ping"}\n\n');
@@ -550,7 +546,6 @@ app.get('/api/subscribe', async (req, res) => {
   });
 });
 
-// 启动服务器
 initIPFS().finally(() => {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`服务器运行在 http://0.0.0.0:${PORT}`);
