@@ -45,6 +45,10 @@ function App() {
   const [messageInput, setMessageInput] = useState('');
   const recordingInterval = useRef(null);
 
+  const getInitial = (str) => {
+    return str && str.charAt(0) ? str.charAt(0).toUpperCase() : '?';
+  };
+
   useEffect(() => {
     checkConnection();
     loadProfile();
@@ -877,7 +881,7 @@ function App() {
         {profileCid && (
           <div className="user-profile">
             <div className="avatar">
-              {username.charAt(0).toUpperCase()}
+              {getInitial(username)}
             </div>
             <div className="user-info">
               <div className="user-name">{username}</div>
@@ -901,7 +905,7 @@ function App() {
         {/* 桌面端推文发布框 */}
         <div className="tweet-compose">
           <div className="avatar">
-            {username ? username.charAt(0).toUpperCase() : '?'}
+            {getInitial(username)}
           </div>
           <div className="compose-area">
             <textarea
@@ -946,7 +950,7 @@ function App() {
                       friends.map(friend => (
                         <div key={friend.username} className="message-item" onClick={() => setSelectedChat(friend.username)}>
                           <div className="message-avatar">
-                            {friend.username.charAt(0).toUpperCase()}
+                            {getInitial(friend.username)}
                           </div>
                           <div className="message-info">
                             <div className="message-name">{friend.username}</div>
@@ -1000,7 +1004,7 @@ function App() {
                       >
                         {msg.from !== username && (
                           <div className="message-avatar">
-                            {msg.from.charAt(0).toUpperCase()}
+                            {getInitial(msg.from)}
                           </div>
                         )}
                         <div className="message-wrapper">
@@ -1013,7 +1017,7 @@ function App() {
                         </div>
                         {msg.from === username && (
                           <div className="message-avatar">
-                            {msg.from.charAt(0).toUpperCase()}
+                            {getInitial(msg.from)}
                           </div>
                         )}
                       </div>
@@ -1138,7 +1142,7 @@ function App() {
                       friends
                         .sort((a, b) => a.username.localeCompare(b.username))
                         .reduce((acc, friend) => {
-                          const firstLetter = friend.username.charAt(0).toUpperCase();
+                          const firstLetter = getInitial(friend.username);
                           if (!acc[firstLetter]) {
                             acc[firstLetter] = [];
                           }
@@ -1161,7 +1165,7 @@ function App() {
                                 setShowFriendProfile(true);
                               }}
                             >
-                              {friend.username.charAt(0).toUpperCase()}
+                              {getInitial(friend.username)}
                             </div>
                             <div 
                               className="contact-info"
@@ -1198,7 +1202,7 @@ function App() {
                   tweets.map(tweet => (
                     <div key={tweet.id} className="moment-item">
                       <div className="moment-avatar">
-                        {(tweet.username || tweet.author).charAt(0).toUpperCase()}
+                        {(tweet.username || tweet.author) ? getInitial(tweet.username || tweet.author) : '?'}
                       </div>
                       <div className="moment-content">
                         <div className="moment-author">{tweet.username || tweet.author}</div>
@@ -1242,7 +1246,7 @@ function App() {
                       friends.map(friend => (
                         <div key={friend.username} className="message-item" onClick={() => setSelectedChat(friend.username)}>
                           <div className="message-avatar">
-                            {friend.username.charAt(0).toUpperCase()}
+                            {getInitial(friend.username)}
                           </div>
                           <div className="message-info">
                             <div className="message-name">{friend.username}</div>
@@ -1296,7 +1300,7 @@ function App() {
                       >
                         {msg.from !== username && (
                           <div className="message-avatar">
-                            {msg.from.charAt(0).toUpperCase()}
+                            {getInitial(msg.from)}
                           </div>
                         )}
                         <div className="message-wrapper">
@@ -1309,7 +1313,7 @@ function App() {
                         </div>
                         {msg.from === username && (
                           <div className="message-avatar">
-                            {msg.from.charAt(0).toUpperCase()}
+                            {getInitial(msg.from)}
                           </div>
                         )}
                       </div>
@@ -1420,7 +1424,7 @@ function App() {
                   <img src={avatarUrl} alt="avatar" className="profile-card-avatar-img" />
                 ) : (
                   <div className="profile-card-avatar">
-                    {(nickname || username) ? (nickname || username).charAt(0).toUpperCase() : '?'}
+                    {(nickname || username) ? getInitial(nickname || username) : '?'}
                   </div>
                 )}
                 <div className="profile-card-info">
@@ -1662,7 +1666,7 @@ function App() {
                   <img src={avatarUrl} alt="avatar" className="edit-avatar-img" />
                 ) : (
                   <div className="edit-avatar">
-                    {(editUsername || username) ? (editUsername || username).charAt(0).toUpperCase() : '?'}
+                    {(editUsername || username) ? getInitial(editUsername || username) : '?'}
                   </div>
                 )}
                 <svg className="avatar-edit-icon" viewBox="0 0 24 24" fill="currentColor">
@@ -1738,7 +1742,7 @@ function App() {
           <div className="friend-profile-content">
             <div className="friend-profile-card">
               <div className="friend-profile-avatar">
-                {selectedFriend.username.charAt(0).toUpperCase()}
+                {getInitial(selectedFriend.username)}
               </div>
               <div className="friend-profile-info">
                 <div className="friend-profile-name">{selectedFriend.username}</div>
@@ -1981,7 +1985,7 @@ function App() {
                 <div className="result-header">搜索结果</div>
                 <div className="result-item">
                   <div className="result-avatar">
-                    {searchResult.username.charAt(0).toUpperCase()}
+                    {getInitial(searchResult.username)}
                   </div>
                   <div className="result-info">
                     <div className="result-name">{searchResult.username}</div>
@@ -2113,7 +2117,7 @@ function App() {
               friendRequests.map(request => (
                 <div key={request.id} className="friend-request-item">
                   <div className="request-avatar">
-                    {request.from.charAt(0).toUpperCase()}
+                    {getInitial(request.from)}
                   </div>
                   <div className="request-info">
                     <div className="request-name">{request.from}</div>
