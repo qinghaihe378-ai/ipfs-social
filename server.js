@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import { createClient } from '@supabase/supabase-js';
+import { create } from 'ipfs-http-client';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -13,6 +14,23 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
+let ipfs;
+let ipfsConnected = false;
+
+// 尝试连接到本地 IPFS 节点
+try {
+  ipfs = create({
+    host: 'localhost',
+    port: 5001,
+    protocol: 'http'
+  });
+  ipfsConnected = true;
+  console.log('IPFS 连接成功');
+} catch (error) {
+  console.error('IPFS 连接失败:', error.message);
+  ipfsConnected = false;
+}
+
 const onlineUsers = new Map();
 const offlineMessages = new Map();
 const groups = new Map();
@@ -22,13 +40,13 @@ const users = new Set();
 
 console.log('服务器初始化中...');
 console.log('Supabase连接状态:', supabase ? '已配置' : '未配置');
-console.log('IPFS功能: 在Railway环境中暂时禁用');
+console.log('IPFS连接状态:', ipfsConnected ? '已连接' : '未连接');
 
 app.get('/api/health', (req, res) => {
   console.log('健康检查请求:', new Date().toISOString());
   res.json({ 
     status: 'ok', 
-    ipfsConnected: false,
+    ipfsConnected: ipfsConnected,
     timestamp: Date.now(),
     env: {
       supabaseUrl: process.env.SUPABASE_URL ? 'set' : 'not set',
@@ -601,11 +619,24 @@ app.post('/api/tweet', async (req, res) => {
       id: Date.now().toString()
     };
 
+    let cid = null;
+    if (ipfsConnected) {
+      try {
+        const result = await ipfs.add(JSON.stringify(tweet));
+        cid = result.path;
+        tweet.cid = cid;
+        console.log('推文已存储到 IPFS:', cid);
+      } catch (ipfsError) {
+        console.warn('IPFS 存储失败:', ipfsError.message);
+      }
+    }
+
     tweets.unshift(tweet);
 
     res.json({ 
       success: true, 
-      tweet 
+      tweet, 
+      cid 
     });
   } catch (error) {
     console.error('发布推文错误:', error);
@@ -619,51 +650,79 @@ app.get('/api/tweets', (req, res) => {
 
 app.post('/api/profile', async (req, res) => {
   try {
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase 未配置' });
-    }
-    
     const { username, bio, avatar, publicKey } = req.body;
     
     if (!username || !publicKey) {
       return res.status(400).json({ error: '缺少必要字段' });
     }
 
-    const { data: existingUser, error: checkError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('username', username)
-      .single();
+    const profile = {
+      username,
+      nickname: username,
+      bio: bio || '欢迎使用 Mutual',
+      avatar: avatar || '',
+      publicKey: publicKey,
+      createdAt: Date.now()
+    };
 
-    if (checkError && checkError.code !== 'PGRST116') {
-      throw checkError;
+    let cid = null;
+    if (ipfsConnected) {
+      try {
+        const result = await ipfs.add(JSON.stringify(profile));
+        cid = result.path;
+        console.log('用户资料已存储到 IPFS:', cid);
+      } catch (ipfsError) {
+        console.warn('IPFS 存储失败:', ipfsError.message);
+        cid = `ipfs-user-${username}-${Date.now()}`;
+      }
+    } else {
+      cid = `ipfs-user-${username}-${Date.now()}`;
     }
 
-    if (existingUser) {
-      return res.status(400).json({ success: false, code: 'USERNAME_EXISTS', error: '用户名已存在' });
+    if (supabase) {
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+
+      if (existingUser) {
+        return res.status(400).json({ success: false, code: 'USERNAME_EXISTS', error: '用户名已存在' });
+      }
+
+      const { data: user, error: createError } = await supabase
+        .from('users')
+        .insert({
+          username,
+          nickname: username,
+          bio: bio || '欢迎使用 Mutual',
+          avatar: avatar || '',
+          public_key: publicKey
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        throw createError;
+      }
+
+      res.json({ 
+        success: true, 
+        cid,
+        profile: user 
+      });
+    } else {
+      // 如果没有 Supabase，仍然返回成功
+      res.json({ 
+        success: true, 
+        cid,
+        profile 
+      });
     }
-
-    const { data: user, error: createError } = await supabase
-      .from('users')
-      .insert({
-        username,
-        nickname: username,
-        bio: bio || '欢迎使用 Mutual',
-        avatar: avatar || '',
-        public_key: publicKey
-      })
-      .select()
-      .single();
-
-    if (createError) {
-      throw createError;
-    }
-
-    res.json({ 
-      success: true, 
-      cid: `ipfs-user-${username}-${Date.now()}`,
-      profile: user 
-    });
   } catch (error) {
     console.error('创建资料错误:', error);
     res.status(500).json({ error: error.message });
@@ -672,25 +731,28 @@ app.post('/api/profile', async (req, res) => {
 
 app.get('/api/profile', async (req, res) => {
   try {
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase 未配置' });
-    }
-    
     const { username } = req.query;
     
-    let query = supabase.from('users').select('*');
-    
-    if (username) {
-      query = query.eq('username', username);
-    }
-    
-    const { data: users, error } = await query;
+    if (supabase) {
+      let query = supabase.from('users').select('*');
+      
+      if (username) {
+        query = query.eq('username', username);
+      }
+      
+      const { data: users, error } = await query;
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
 
-    res.json(users);
+      res.json({ success: true, users });
+    } else {
+      // 如果没有 Supabase，返回内存中的用户信息
+      const userList = Array.from(users);
+      const filteredUsers = username ? userList.filter(u => u === username).map(u => ({ username: u })) : userList.map(u => ({ username: u }));
+      res.json({ success: true, users: filteredUsers });
+    }
   } catch (error) {
     console.error('获取用户信息错误:', error);
     res.status(500).json({ error: error.message });

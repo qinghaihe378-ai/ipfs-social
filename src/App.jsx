@@ -3,7 +3,7 @@ import './App.css';
 import Wallet from './components/Wallet';
 import Bot from './components/Bot';
 
-const API_BASE = 'https://web-production-0b52d.up.railway.app' || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+const API_BASE = import.meta.env.PROD ? 'https://ipfs-social.vercel.app/api' : 'http://localhost:3001/api';
 
 function App() {
   const [tweets, setTweets] = useState([]);

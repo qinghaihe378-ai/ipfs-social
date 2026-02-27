@@ -148,7 +148,7 @@
 .network-balance-section {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   padding: var(--spacing-card) var(--spacing-page);
   background: rgba(26, 26, 26, 0.6);
   backdrop-filter: blur(var(--blur));
@@ -156,10 +156,15 @@
   border-radius: var(--radius-card);
   border: 1px solid var(--divider-alpha);
   box-shadow: var(--shadow-light);
+  overflow: visible;
+  position: relative;
+  z-index: 1000;
 }
 
 .network-selector {
   flex: 1;
+  position: relative;
+  z-index: 1000;
 }
 
 .network-dropdown {
@@ -207,7 +212,7 @@
   border-radius: var(--radius-card);
   margin-top: var(--spacing-element);
   overflow: hidden;
-  z-index: 100;
+  z-index: 9999;
   border: 1px solid var(--divider-alpha);
   box-shadow: var(--shadow);
 }
