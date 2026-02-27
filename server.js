@@ -157,7 +157,7 @@ app.post('/api/send-message', async (req, res) => {
     }
 
     const message = {
-      id: Date.now().toString(),
+      id: Math.floor(Math.random() * 10000000),
       from: from,
       to: to,
       from_user: from,
@@ -644,7 +644,7 @@ app.post('/api/create-group', async (req, res) => {
   }
 
   try {
-    const groupId = Date.now().toString();
+    const groupId = Math.floor(Math.random() * 10000000).toString();
     const group = {
       id: groupId,
       name: groupName,
@@ -800,7 +800,7 @@ app.post('/api/send-group-message', async (req, res) => {
     }
 
     const message = {
-      id: Date.now().toString(),
+      id: Math.floor(Math.random() * 10000000),
       from,
       groupId,
       groupName: group.name,
@@ -885,7 +885,7 @@ app.post('/api/upload-file', async (req, res) => {
     }
 
     const message = {
-      id: Date.now().toString(),
+      id: Math.floor(Math.random() * 10000000),
       from,
       to,
       type: 'file',
