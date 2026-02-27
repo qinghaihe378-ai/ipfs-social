@@ -1,4 +1,34 @@
+import { NFTStorage, File } from 'nft.storage';
 import { messages } from './profile.js';
+
+const NFT_STORAGE_KEY = process.env.NFT_STORAGE_API_KEY;
+
+async function uploadToNFTStorage(fileData, fileName, fileType) {
+  if (!NFT_STORAGE_KEY) {
+    console.warn('NFT_STORAGE_API_KEY 未配置，使用模拟 CID');
+    return `ipfs-file-${Date.now()}`;
+  }
+
+  try {
+    const client = new NFTStorage({ token: NFT_STORAGE_KEY });
+    
+    const buffer = Buffer.from(fileData, 'base64');
+    
+    const file = new File([buffer], fileName, { type: fileType });
+    
+    const metadata = await client.store({
+      name: fileName,
+      description: `Uploaded file from IPFS Social`,
+      image: file
+    });
+    
+    console.log('文件上传到 NFT.Storage 成功:', metadata.ipnft);
+    return metadata.ipnft;
+  } catch (error) {
+    console.error('NFT.Storage 上传失败:', error.message);
+    return `ipfs-file-${Date.now()}`;
+  }
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,6 +46,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: '缺少必要字段' });
     }
 
+    const cid = await uploadToNFTStorage(fileData, fileName, fileType);
+
     const message = {
       id: Date.now().toString(),
       from,
@@ -24,8 +56,9 @@ export default async function handler(req, res) {
       fileName,
       fileType,
       fileSize: fileData.length,
-      cid: `ipfs-file-${Date.now()}`,
-      timestamp: Date.now()
+      cid,
+      timestamp: Date.now(),
+      storageType: cid.startsWith('ipfs-file-') ? 'local' : 'nft.storage'
     };
 
     if (!messages.has(to)) {
@@ -41,7 +74,7 @@ export default async function handler(req, res) {
     res.json({
       success: true,
       message,
-      cid: message.cid
+      cid
     });
   } else {
     res.status(405).json({ error: 'Method not allowed' });
