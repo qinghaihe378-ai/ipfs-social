@@ -286,6 +286,8 @@ function App() {
     if (savedUsername) {
       setUsername(savedUsername);
       setIsLoggedIn(true);
+      loadGroupsFromStorage();
+      loadGroups(savedUsername);
     }
     if (savedNickname) setNickname(savedNickname);
     if (savedPublicKey) setPublicKey(savedPublicKey);
