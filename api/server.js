@@ -2,7 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import { createClient } from '@supabase/supabase-js';
-import { NFTStorage } from 'nft.storage';
+import { create } from 'ipfs-http-client';
+import 'dotenv/config';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,42 +15,48 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-const nftStorageToken = process.env.NFT_STORAGE_API_KEY || '';
-const nftstorage = nftStorageToken ? new NFTStorage({ token: nftStorageToken }) : null;
+let ipfs;
+let ipfsConnected = false;
+
+// 尝试连接到本地 IPFS 节点
+try {
+  ipfs = create({
+    host: 'localhost',
+    port: 5001,
+    protocol: 'http'
+  });
+  ipfsConnected = true;
+  console.log('IPFS 连接成功');
+} catch (error) {
+  console.error('IPFS 连接失败:', error.message);
+  ipfsConnected = false;
+}
 
 const onlineUsers = new Map();
 const offlineMessages = new Map();
 const groups = new Map();
+const tweets = [];
+const friendRequests = new Map();
+const friends = new Map();
+const messages = new Map();
+const users = new Set();
 
-console.log('API服务器初始化中...');
+console.log('服务器初始化中...');
 console.log('Supabase连接状态:', supabase ? '已配置' : '未配置');
-console.log('IPFS功能:', nftstorage ? '已启用 (NFT.Storage)' : '未配置');
-
+console.log('IPFS连接状态:', ipfsConnected ? '已连接' : '未连接');
 
 app.get('/api/health', (req, res) => {
+  console.log('健康检查请求:', new Date().toISOString());
   res.json({ 
     status: 'ok', 
-    ipfsConnected: !!nftstorage,
+    ipfsConnected: ipfsConnected,
+    timestamp: Date.now(),
     env: {
       supabaseUrl: process.env.SUPABASE_URL ? 'set' : 'not set',
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY ? 'set' : 'not set',
-      nftStorageApiKey: process.env.NFT_STORAGE_API_KEY ? 'set' : 'not set'
+      port: process.env.PORT || 3001,
+      nodeEnv: process.env.NODE_ENV || 'development'
     }
-  });
-});
-
-app.get('/api/env-test', (req, res) => {
-  res.json({ 
-    status: 'ok',
-    env: {
-      NFT_STORAGE_API_KEY: process.env.NFT_STORAGE_API_KEY ? 'exists' : 'not exists',
-      SUPABASE_URL: process.env.SUPABASE_URL ? 'exists' : 'not exists',
-      SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'exists' : 'not exists',
-      NODE_ENV: process.env.NODE_ENV || 'not set',
-      PORT: process.env.PORT || 'not set'
-    },
-    nftstorage: !!nftstorage,
-    timestamp: new Date().toISOString()
   });
 });
 
@@ -82,161 +89,993 @@ app.post('/api/check-username', async (req, res) => {
 app.post('/api/user-online', async (req, res) => {
   const { username, publicKey } = req.body;
   
-  if (!username || !publicKey) {
-    return res.status(400).json({ error: '缺少必要字段' });
+  if (!username) {
+    return res.status(400).json({ error: '缺少用户名' });
+  }
+
+  onlineUsers.set(username, {
+    publicKey,
+    lastSeen: Date.now(),
+    online: true
+  });
+
+  // 添加到用户列表
+  users.add(username);
+
+  res.json({ success: true, username });
+});
+
+app.post('/api/check-user-online', async (req, res) => {
+  const { username } = req.body;
+  
+  if (!username) {
+    return res.status(400).json({ error: '缺少用户名' });
   }
 
   try {
-    onlineUsers.set(username, {
-      publicKey,
-      lastSeen: Date.now(),
-      connectedAt: Date.now()
+    let userExists = false;
+    
+    if (supabase) {
+      const { data: existingUser, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      userExists = !error && existingUser !== null;
+    } else {
+      // 在 Supabase 未配置时，使用内存中的用户列表
+      userExists = users.has(username);
+    }
+    
+    const user = onlineUsers.get(username);
+    const isOnline = user && (Date.now() - user.lastSeen) < 60000;
+
+    res.json({ 
+      online: isOnline, 
+      exists: userExists,
+      username,
+      lastSeen: user?.lastSeen || null
     });
+  } catch (error) {
+    console.error('检查用户状态错误:', error);
+    res.json({ 
+      online: false, 
+      exists: false,
+      username,
+      lastSeen: null
+    });
+  }
+});
+
+app.post('/api/send-message', async (req, res) => {
+  try {
+    const { from, to, content, timestamp } = req.body;
+    
+    if (!from || !to || !content) {
+      return res.status(400).json({ error: '缺少必要字段' });
+    }
+
+    const message = {
+      id: Math.floor(Math.random() * 10000000),
+      from: from,
+      to: to,
+      from_user: from,
+      to_user: to,
+      content,
+      type: 'text',
+      timestamp: timestamp || Date.now(),
+      read: false
+    };
+
+    if (supabase) {
+      try {
+        const { data: savedMessage, error: dbError } = await supabase
+          .from('messages')
+          .insert({
+            id: message.id,
+            from_user: message.from_user,
+            to_user: message.to_user,
+            content: message.content,
+            type: message.type,
+            timestamp: message.timestamp,
+            read: message.read
+          })
+          .select()
+          .single();
+
+        if (dbError) {
+          console.warn('数据库存储失败:', dbError.message);
+        }
+      } catch (dbError) {
+        console.warn('数据库错误:', dbError.message);
+      }
+    } else {
+      // 使用内存存储消息
+      const recipientMessages = messages.get(to) || [];
+      recipientMessages.push(message);
+      messages.set(to, recipientMessages);
+    }
+
+    const recipient = onlineUsers.get(to);
+    const isOnline = recipient && (Date.now() - recipient.lastSeen) < 60000;
 
     res.json({ 
       success: true, 
-      message: '用户上线成功',
-      onlineUsers: Array.from(onlineUsers.keys())
+      message,
+      delivered: isOnline
     });
   } catch (error) {
-    console.error('用户上线错误:', error);
+    console.error('发送消息错误:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/offline-messages/:username', (req, res) => {
+app.get('/api/subscribe-messages/:username', async (req, res) => {
+  const { username } = req.params;
+  
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  let lastFriendRequestCount = 0;
+  let lastMessageCount = 0;
+
+  const checkForUpdates = async () => {
+    try {
+      let newFriendRequests = [];
+      let newMessages = [];
+
+      if (supabase) {
+        const { data: frData } = await supabase
+          .from('friend_requests')
+          .select('id')
+          .eq('to_user', username)
+          .eq('status', 'pending');
+        newFriendRequests = frData || [];
+      } else {
+        newFriendRequests = friendRequests.get(username) || [];
+      }
+
+      if (supabase) {
+        // 获取用户所在的所有群组
+        const { data: userGroups } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('username', username);
+        
+        const groupIds = (userGroups || []).map(g => `group:${g.group_id}`);
+        
+        // 查询私聊消息
+        const { data: privateMsgs } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('to_user', username);
+        
+        // 查询群消息
+        let groupMsgs = [];
+        if (groupIds.length > 0) {
+          const { data } = await supabase
+            .from('messages')
+            .select('id')
+            .in('to_user', groupIds);
+          groupMsgs = data || [];
+        }
+        
+        newMessages = [...(privateMsgs || []), ...groupMsgs];
+      } else {
+        newMessages = messages.get(username) || [];
+      }
+
+      if (newFriendRequests.length > lastFriendRequestCount) {
+        const diff = newFriendRequests.length - lastFriendRequestCount;
+        res.write(`data: {"type": "friend_request", "count": ${diff}}\n\n`);
+        lastFriendRequestCount = newFriendRequests.length;
+      }
+
+      if (newMessages.length > lastMessageCount) {
+        const diff = newMessages.length - lastMessageCount;
+        res.write(`data: {"type": "new_message", "count": ${diff}}\n\n`);
+        lastMessageCount = newMessages.length;
+      }
+
+      res.write('data: {"type": "ping"}\n\n');
+    } catch (error) {
+      console.error('检查更新错误:', error);
+    }
+  };
+
+  const interval = setInterval(checkForUpdates, 5000);
+
+  req.on('close', () => {
+    clearInterval(interval);
+  });
+});
+
+app.get('/api/offline-messages/:username', async (req, res) => {
   const { username } = req.params;
   
   try {
-    const messages = offlineMessages.get(username) || [];
-    offlineMessages.delete(username);
-    res.json(messages);
+    let messagesList = [];
+    
+    if (supabase) {
+      // 获取用户所在的所有群组 (通过group_members表)
+      const { data: userGroups, error: groupsError } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('username', username);
+
+      const groupIds = (userGroups || []).map(g => `group:${g.group_id}`);
+
+      // 获取私聊消息和群组消息
+      let query = supabase
+        .from('messages')
+        .select('*')
+        .eq('to_user', username);
+      
+      // 如果有群组，也获取群消息
+      if (groupIds.length > 0) {
+        const { data: dbMessages, error } = await supabase
+          .from('messages')
+          .select('*')
+          .or(`to_user.eq.${username},to_user.in.(${groupIds.join(',')})`)
+          .order('timestamp', { ascending: true });
+        
+        if (error) {
+          console.warn('获取离线消息失败:', error.message);
+        } else {
+          messagesList = (dbMessages || []).map(m => ({
+            ...m,
+            from: m.from_user,
+            to: m.to_user
+          }));
+        }
+      } else {
+        // 没有群组，只获取私聊消息
+        const { data: dbMessages, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('to_user', username)
+          .order('timestamp', { ascending: true });
+        
+        if (error) {
+          console.warn('获取离线消息失败:', error.message);
+        } else {
+          messagesList = (dbMessages || []).map(m => ({
+            ...m,
+            from: m.from_user,
+            to: m.to_user
+          }));
+        }
+      }
+    } else {
+      // 从内存中获取消息
+      const userMessages = [];
+      
+      // 查找发送给该用户的消息和该用户发送的消息
+      for (const [recipient, msgs] of messages.entries()) {
+        msgs.forEach(msg => {
+          if (msg.to === username || msg.from === username) {
+            userMessages.push(msg);
+          }
+        });
+      }
+      
+      messagesList = userMessages.sort((a, b) => a.timestamp - b.timestamp);
+    }
+    
+    res.json({ 
+      success: true, 
+      messages: messagesList,
+      count: messagesList.length
+    });
   } catch (error) {
     console.error('获取离线消息错误:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/subscribe-messages/:username', (req, res) => {
-  const { username } = req.params;
+app.post('/api/mark-read', async (req, res) => {
+  const { messageIds, username } = req.body;
   
   try {
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive'
-    });
-
-    res.write('data: {"type": "connected"}\n\n');
-
-    const interval = setInterval(() => {
-      try {
-        res.write('data: {"type": "ping"}\n\n');
-      } catch (error) {
-        clearInterval(interval);
+    const messages = offlineMessages.get(username) || [];
+    messageIds.forEach(id => {
+      const msg = messages.find(m => m.id === id);
+      if (msg) {
+        msg.read = true;
       }
-    }, 30000);
-
-    req.on('close', () => {
-      clearInterval(interval);
     });
+    
+    res.json({ success: true, markedCount: messageIds.length });
   } catch (error) {
-    console.error('订阅消息错误:', error);
-    res.status(500).end();
+    console.error('标记已读错误:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/profile', async (req, res) => {
+app.post('/api/send-friend-request', async (req, res) => {
+  const { from, to, message } = req.body;
+  
+  if (!from || !to) {
+    return res.status(400).json({ error: '缺少必要字段' });
+  }
+
   try {
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase 未配置' });
+    let userExists = true;
+
+    // 检查目标用户是否存在
+    if (supabase) {
+      const { data: targetUser, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', to)
+        .single();
+
+      if (userError || !targetUser) {
+        return res.status(404).json({ error: '目标用户不存在' });
+      }
+    }
+
+    const request = {
+      id: Date.now().toString(),
+      from_user: from,
+      to_user: to,
+      message: message || '',
+      status: 'pending',
+      created_at: Date.now()
+    };
+
+    // 存储好友申请
+    if (supabase) {
+      try {
+        const { error: insertError } = await supabase
+          .from('friend_requests')
+          .insert(request);
+        
+        if (insertError) {
+          console.error('数据库存储好友申请失败:', insertError.message);
+          throw new Error('数据库存储失败: ' + insertError.message);
+        }
+      } catch (dbError) {
+        console.error('数据库存储好友申请失败:', dbError.message);
+        throw dbError;
+      }
+    }
+
+    // 存储到内存中
+    const userRequests = friendRequests.get(to) || [];
+    userRequests.push(request);
+    friendRequests.set(to, userRequests);
+
+    res.json({ 
+      success: true, 
+      request 
+    });
+  } catch (error) {
+    console.error('发送好友申请错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/friend-requests/:username', async (req, res) => {
+  const { username } = req.params;
+  
+  try {
+    let requests = [];
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .select('*')
+        .eq('to_user', username)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('获取好友申请失败:', error.message);
+      } else {
+        requests = data;
+      }
+    } else {
+      // 从内存中获取
+      requests = friendRequests.get(username) || [];
+      requests = requests.filter(r => r.status === 'pending');
+    }
+
+    res.json({ 
+      success: true, 
+      requests 
+    });
+  } catch (error) {
+    console.error('获取好友申请错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/respond-friend-request', async (req, res) => {
+  const { requestId, username, action } = req.body;
+  
+  if (!requestId || !username || !action || !['accept', 'reject'].includes(action)) {
+    return res.status(400).json({ error: '缺少必要字段或参数错误' });
+  }
+
+  try {
+    let request = null;
+
+    if (supabase) {
+      // 从数据库获取申请
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .select('*')
+        .eq('id', requestId)
+        .eq('to_user', username)
+        .single();
+
+      if (error || !data) {
+        return res.status(404).json({ error: '好友申请不存在' });
+      }
+
+      request = data;
+
+      // 更新申请状态
+      await supabase
+        .from('friend_requests')
+        .update({ status: action === 'accept' ? 'accepted' : 'rejected' })
+        .eq('id', requestId);
+    } else {
+      // 从内存中获取
+      const userRequests = friendRequests.get(username) || [];
+      request = userRequests.find(r => r.id === requestId);
+
+      if (!request) {
+        return res.status(404).json({ error: '好友申请不存在' });
+      }
+
+      request.status = action === 'accept' ? 'accepted' : 'rejected';
+    }
+
+    if (action === 'accept' && request) {
+      // 如果接受申请，创建好友关系
+      if (supabase) {
+        try {
+          // 为双方创建好友记录
+          await supabase
+            .from('friends')
+            .insert([
+              { user1: request.from_user, user2: request.to_user },
+              { user1: request.to_user, user2: request.from_user }
+            ]);
+        } catch (dbError) {
+          console.warn('创建好友关系失败:', dbError.message);
+        }
+      } else {
+        // 使用内存存储好友关系
+        const user1Friends = friends.get(request.from_user) || [];
+        const user2Friends = friends.get(request.to_user) || [];
+        
+        user1Friends.push({
+          user1: request.from_user,
+          user2: request.to_user,
+          createdAt: Date.now()
+        });
+        
+        user2Friends.push({
+          user1: request.to_user,
+          user2: request.from_user,
+          createdAt: Date.now()
+        });
+        
+        friends.set(request.from_user, user1Friends);
+        friends.set(request.to_user, user2Friends);
+      }
+    }
+
+    let newFriends = [];
+    if (action === 'accept') {
+      newFriends = [request.from_user];
+    }
+
+    res.json({ 
+      success: true, 
+      action, 
+      request,
+      newFriends
+    });
+  } catch (error) {
+    console.error('响应好友申请错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/cancel-friend-request', async (req, res) => {
+  const { requestId, username } = req.body;
+  
+  if (!requestId || !username) {
+    return res.status(400).json({ error: '缺少必要字段' });
+  }
+
+  try {
+    if (supabase) {
+      const { error } = await supabase
+        .from('friend_requests')
+        .delete()
+        .eq('id', requestId)
+        .eq('from', username);
+
+      if (error) {
+        console.warn('取消好友申请失败:', error.message);
+      }
+    } else {
+      // 从内存中删除
+      const userRequests = friendRequests.get(username) || [];
+      const filteredRequests = userRequests.filter(r => r.id !== requestId);
+      friendRequests.set(username, filteredRequests);
+    }
+
+    res.json({ 
+      success: true 
+    });
+  } catch (error) {
+    console.error('取消好友申请错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/friends/:username', async (req, res) => {
+  const { username } = req.params;
+  
+  try {
+    let friendsList = [];
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('friends')
+        .select('*')
+        .eq('user1', username);
+
+      if (error) {
+        console.warn('获取好友列表失败:', error.message);
+      } else {
+        friendsList = data.map(f => ({
+          username: f.user2,
+          addedAt: f.added_at
+        }));
+      }
+    } else {
+      // 从内存中获取
+      const userFriends = friends.get(username) || [];
+      friendsList = userFriends.map(f => ({
+        username: f.user2,
+        addedAt: f.createdAt
+      }));
+    }
+
+    res.json({ 
+      success: true, 
+      friends: friendsList
+    });
+  } catch (error) {
+    console.error('获取好友列表错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/create-group', async (req, res) => {
+  const { groupName, creator, members } = req.body;
+  
+  if (!groupName || !creator) {
+    return res.status(400).json({ error: '缺少必要字段' });
+  }
+
+  try {
+    const groupId = Math.floor(Math.random() * 10000000).toString();
+    const group = {
+      id: groupId,
+      name: groupName,
+      creator,
+      members: members || [creator],
+      createdAt: Date.now()
+    };
+
+    if (supabase) {
+      try {
+        const { data: savedGroup, error: dbError } = await supabase
+          .from('groups')
+          .insert({
+            id: parseInt(groupId),
+            group_id: groupId,
+            name: groupName,
+            creator: creator
+          })
+          .select()
+          .single();
+
+        if (dbError) {
+          console.warn('数据库存储群组失败:', dbError.message);
+        } else {
+          const membersList = members || [creator];
+          for (const member of membersList) {
+            await supabase
+              .from('group_members')
+              .insert({
+                group_id: groupId,
+                username: member
+              });
+          }
+        }
+      } catch (dbError) {
+        console.warn('数据库错误:', dbError.message);
+      }
+    }
+
+    groups.set(groupId, group);
+
+    res.json({ 
+      success: true, 
+      group 
+    });
+  } catch (error) {
+    console.error('创建群组错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/join-group', async (req, res) => {
+  const { groupId, username } = req.body;
+  
+  if (!groupId || !username) {
+    return res.status(400).json({ error: '缺少必要字段' });
+  }
+
+  try {
+    const group = groups.get(groupId);
+    if (!group) {
+      return res.status(404).json({ error: '群组不存在' });
+    }
+
+    if (group.members.includes(username)) {
+      return res.status(400).json({ error: '已在群组中' });
+    }
+
+    group.members.push(username);
+
+    if (supabase) {
+      try {
+        await supabase
+          .from('group_members')
+          .insert({
+            group_id: groupId,
+            username: username
+          });
+      } catch (dbError) {
+        console.warn('数据库添加群组成员失败:', dbError.message);
+      }
     }
     
-    const { username, bio, avatar, publicKey } = req.body;
+    res.json({ 
+      success: true, 
+      group 
+    });
+  } catch (error) {
+    console.error('加入群组错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/groups/:username', async (req, res) => {
+  const { username } = req.params;
+  
+  try {
+    let groupsList = [];
+
+    if (supabase) {
+      const { data: userGroups, error: groupsError } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('username', username);
+
+      if (groupsError) {
+        console.warn('获取用户群组失败:', groupsError.message);
+      } else {
+        const groupIds = (userGroups || []).map(g => g.group_id);
+        
+        if (groupIds.length > 0) {
+          const { data: dbGroups, error } = await supabase
+            .from('groups')
+            .select('*')
+            .in('group_id', groupIds);
+
+          if (error) {
+            console.warn('获取群组失败:', error.message);
+          } else {
+            // 获取每个群组的成员列表
+            groupsList = await Promise.all((dbGroups || []).map(async (g) => {
+              const { data: members } = await supabase
+                .from('group_members')
+                .select('username')
+                .eq('group_id', g.group_id);
+              
+              return {
+                ...g,
+                id: g.group_id,
+                members: (members || []).map(m => m.username)
+              };
+            }));
+          }
+        }
+      }
+    }
+
+    if (groupsList.length === 0) {
+      groupsList = Array.from(groups.values()).filter(g => 
+        g.members && g.members.includes(username)
+      );
+    }
+
+    res.json({ 
+      success: true, 
+      groups: groupsList
+    });
+  } catch (error) {
+    console.error('获取群组错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/send-group-message', async (req, res) => {
+  try {
+    const { from, groupId, content, timestamp } = req.body;
     
-    if (!username || !publicKey) {
+    if (!from || !groupId || !content) {
       return res.status(400).json({ error: '缺少必要字段' });
     }
 
-    const { data: existingUser, error: checkError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('username', username)
-      .single();
+    let groupName = '群组';
+    let groupMembers = [];
 
-    if (checkError && checkError.code !== 'PGRST116') {
-      throw checkError;
+    if (supabase) {
+      const { data: groupData } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('group_id', groupId)
+        .single();
+      
+      if (groupData) {
+        groupName = groupData.name;
+        const { data: members } = await supabase
+          .from('group_members')
+          .select('username')
+          .eq('group_id', groupId);
+        groupMembers = (members || []).map(m => m.username);
+      }
+    } else {
+      const group = groups.get(groupId);
+      if (!group) {
+        return res.status(404).json({ error: '群组不存在' });
+      }
+      groupName = group.name;
+      groupMembers = group.members || [];
     }
 
-    if (existingUser) {
-      return res.status(400).json({ success: false, code: 'USERNAME_EXISTS', error: '用户名已存在' });
-    }
+    const message = {
+      id: Math.floor(Math.random() * 10000000),
+      from,
+      groupId,
+      groupName,
+      content,
+      timestamp: timestamp || Date.now(),
+      type: 'group'
+    };
 
-    const { data: user, error: createError } = await supabase
-      .from('users')
-      .insert({
-        username,
-        nickname: username,
-        bio: bio || '欢迎使用 Mutual',
-        avatar: avatar || '',
-        public_key: publicKey
-      })
-      .select()
-      .single();
-
-    if (createError) {
-      throw createError;
-    }
-
-    let cid = `ipfs-user-${username}-${Date.now()}`;
-    
-    if (nftstorage) {
+    if (supabase) {
       try {
-        const userData = JSON.stringify(user);
-        const blob = new Blob([userData], { type: 'application/json' });
-        const cidResult = await nftstorage.storeBlob(blob);
-        cid = cidResult;
-        console.log('用户资料已上传到 IPFS:', cid);
-      } catch (ipfsError) {
-        console.warn('IPFS 上传失败:', ipfsError.message);
-        cid = `ipfs-user-${username}-${Date.now()}`;
+        const { data: savedMessage, error: dbError } = await supabase
+          .from('messages')
+          .insert({
+            id: message.id,
+            from_user: message.from,
+            to_user: `group:${groupId}`,
+            content: message.content,
+            timestamp: message.timestamp,
+            type: 'group'
+          })
+          .select()
+          .single();
+
+        if (dbError) {
+          console.warn('数据库存储群消息失败:', dbError.message);
+        }
+      } catch (dbError) {
+        console.warn('数据库错误:', dbError.message);
       }
     }
 
     res.json({ 
       success: true, 
-      cid,
-      profile: user 
+      message 
     });
   } catch (error) {
-    console.error('创建资料错误:', error);
+    console.error('发送群消息错误:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/profile', async (req, res) => {
+app.get('/api/group-messages/:groupId', async (req, res) => {
+  const { groupId } = req.params;
+  
   try {
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase 未配置' });
+    let messagesList = [];
+    
+    if (supabase) {
+      const { data: dbMessages, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('to_user', `group:${groupId}`)
+        .order('timestamp', { ascending: true });
+
+      if (error) {
+        console.warn('获取群消息失败:', error.message);
+      } else {
+        messagesList = (dbMessages || []).map(m => ({
+          ...m,
+          from: m.from_user,
+          to: m.to_user
+        }));
+      }
     }
     
-    const { username } = req.query;
-    
-    let query = supabase.from('users').select('*');
-    
-    if (username) {
-      query = query.eq('username', username);
-    }
-    
-    const { data: users, error } = await query;
-    
-    if (error) {
-      throw error;
-    }
-    
-    res.json(users);
+    res.json({ 
+      success: true, 
+      messages: messagesList
+    });
   } catch (error) {
-    console.error('获取资料错误:', error);
+    console.error('获取群消息错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/groups/:groupId', async (req, res) => {
+  const { groupId } = req.params;
+  const { name, avatar, username } = req.body;
+  
+  if (!username) {
+    return res.status(400).json({ error: '缺少用户名' });
+  }
+
+  try {
+    if (supabase) {
+      const { data: group, error: groupError } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('group_id', groupId)
+        .single();
+
+      if (groupError || !group) {
+        return res.status(404).json({ error: '群组不存在' });
+      }
+
+      if (group.creator !== username) {
+        return res.status(403).json({ error: '只有群主才能修改群资料' });
+      }
+
+      const updateData = {};
+      if (name) updateData.name = name;
+      if (avatar) updateData.avatar = avatar;
+
+      const { data: updatedGroup, error: updateError } = await supabase
+        .from('groups')
+        .update(updateData)
+        .eq('group_id', groupId)
+        .select()
+        .single();
+
+      if (updateError) {
+        return res.status(500).json({ error: updateError.message });
+      }
+
+      const { data: members } = await supabase
+        .from('group_members')
+        .select('username')
+        .eq('group_id', groupId);
+
+      res.json({ 
+        success: true, 
+        group: {
+          ...updatedGroup,
+          id: updatedGroup.group_id,
+          members: (members || []).map(m => m.username)
+        }
+      });
+    } else {
+      const group = groups.get(groupId);
+      if (!group) {
+        return res.status(404).json({ error: '群组不存在' });
+      }
+
+      if (group.creator !== username) {
+        return res.status(403).json({ error: '只有群主才能修改群资料' });
+      }
+
+      if (name) group.name = name;
+      if (avatar) group.avatar = avatar;
+
+      res.json({ success: true, group });
+    }
+  } catch (error) {
+    console.error('更新群组错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/upload-group-avatar', async (req, res) => {
+  try {
+    const { fileData, fileName, fileType, groupId, username } = req.body;
+    
+    if (!fileData || !fileName || !groupId || !username) {
+      return res.status(400).json({ error: '缺少必要字段' });
+    }
+
+    if (supabase) {
+      const { data: group } = await supabase
+        .from('groups')
+        .select('creator')
+        .eq('group_id', groupId)
+        .single();
+
+      if (!group || group.creator !== username) {
+        return res.status(403).json({ error: '只有群主才能上传群头像' });
+      }
+    }
+
+    const cid = await ipfsAdd(fileData);
+    
+    if (supabase) {
+      await supabase
+        .from('groups')
+        .update({ avatar: cid })
+        .eq('group_id', groupId);
+    }
+
+    res.json({ 
+      success: true, 
+      cid,
+      url: `https://ipfs.io/ipfs/${cid}`
+    });
+  } catch (error) {
+    console.error('上传群头像错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/upload-file', async (req, res) => {
+  try {
+    const { fileData, fileName, fileType, from, to } = req.body;
+    
+    if (!fileData || !fileName || !from || !to) {
+      return res.status(400).json({ error: '缺少必要字段' });
+    }
+
+    const message = {
+      id: Math.floor(Math.random() * 10000000),
+      from,
+      to,
+      type: 'file',
+      fileName,
+      fileType,
+      fileSize: Buffer.from(fileData, 'base64').length,
+      timestamp: Date.now()
+    };
+
+    const recipient = onlineUsers.get(to);
+    const isOnline = recipient && (Date.now() - recipient.lastSeen) < 60000;
+
+    res.json({ 
+      success: true, 
+      message
+    });
+  } catch (error) {
+    console.error('上传文件错误:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -257,20 +1096,47 @@ app.post('/api/tweet', async (req, res) => {
       id: Date.now().toString()
     };
 
-    if (nftstorage) {
+    let cid = null;
+    if (ipfsConnected) {
       try {
-        const tweetJSON = JSON.stringify(tweet);
-        const blob = new Blob([tweetJSON], { type: 'application/json' });
-        const cid = await nftstorage.storeBlob(blob);
-        console.log('推文已上传到 IPFS:', cid);
+        const result = await ipfs.add(JSON.stringify(tweet));
+        cid = result.path;
+        tweet.cid = cid;
+        console.log('推文已存储到 IPFS:', cid);
       } catch (ipfsError) {
-        console.warn('IPFS 上传失败:', ipfsError.message);
+        console.warn('IPFS 存储失败:', ipfsError.message);
       }
     }
 
+    if (supabase) {
+      try {
+        const { data: savedTweet, error: dbError } = await supabase
+          .from('tweets')
+          .insert({
+            id: tweet.id,
+            content: tweet.content,
+            author: tweet.author,
+            username: tweet.username,
+            timestamp: tweet.timestamp,
+            cid: cid
+          })
+          .select()
+          .single();
+
+        if (dbError) {
+          console.warn('数据库存储推文失败:', dbError.message);
+        }
+      } catch (dbError) {
+        console.warn('数据库错误:', dbError.message);
+      }
+    }
+
+    tweets.unshift(tweet);
+
     res.json({ 
       success: true, 
-      tweet 
+      tweet, 
+      cid 
     });
   } catch (error) {
     console.error('发布推文错误:', error);
@@ -278,56 +1144,165 @@ app.post('/api/tweet', async (req, res) => {
   }
 });
 
-app.get('/api/tweets', (req, res) => {
-  res.json({ tweets: [] });
-});
-
-app.post('/api/send-message', async (req, res) => {
+app.get('/api/tweets', async (req, res) => {
   try {
-    const { from, to, content, timestamp } = req.body;
-    
-    if (!from || !to || !content) {
-      return res.status(400).json({ error: '缺少必要字段' });
-    }
+    let tweetsList = [];
 
-    const message = {
-      id: Date.now().toString(),
-      from,
-      to,
-      content,
-      timestamp: timestamp || Date.now()
-    };
+    if (supabase) {
+      const { data: dbTweets, error } = await supabase
+        .from('tweets')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(100);
 
-    if (onlineUsers.has(to)) {
-      // 用户在线，可以通过实时连接发送
-      console.log('用户在线，发送实时消息:', message);
-    } else {
-      // 用户离线，存储为离线消息
-      const userMessages = offlineMessages.get(to) || [];
-      userMessages.push(message);
-      offlineMessages.set(to, userMessages);
-      console.log('用户离线，存储离线消息:', message);
-    }
-
-    if (nftstorage) {
-      try {
-        const messageJSON = JSON.stringify(message);
-        const blob = new Blob([messageJSON], { type: 'application/json' });
-        const cid = await nftstorage.storeBlob(blob);
-        console.log('消息已上传到 IPFS:', cid);
-      } catch (ipfsError) {
-        console.warn('IPFS 上传失败:', ipfsError.message);
+      if (error) {
+        console.warn('获取推文失败:', error.message);
+      } else {
+        tweetsList = dbTweets || [];
       }
     }
 
-    res.json({ 
-      success: true, 
-      message 
-    });
+    if (tweetsList.length === 0) {
+      tweetsList = tweets;
+    }
+
+    res.json({ tweets: tweetsList });
   } catch (error) {
-    console.error('发送消息错误:', error);
+    console.error('获取推文错误:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+app.post('/api/profile', async (req, res) => {
+  try {
+    const { username, bio, avatar, publicKey } = req.body;
+    
+    if (!username || !publicKey) {
+      return res.status(400).json({ error: '缺少必要字段' });
+    }
+
+    const profile = {
+      username,
+      nickname: username,
+      bio: bio || '欢迎使用 Mutual',
+      avatar: avatar || '',
+      publicKey: publicKey,
+      createdAt: Date.now()
+    };
+
+    let cid = null;
+    if (ipfsConnected) {
+      try {
+        const result = await ipfs.add(JSON.stringify(profile));
+        cid = result.path;
+        console.log('用户资料已存储到 IPFS:', cid);
+      } catch (ipfsError) {
+        console.warn('IPFS 存储失败:', ipfsError.message);
+        cid = `ipfs-user-${username}-${Date.now()}`;
+      }
+    } else {
+      cid = `ipfs-user-${username}-${Date.now()}`;
+    }
+
+    if (supabase) {
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+
+      if (existingUser) {
+        return res.status(400).json({ success: false, code: 'USERNAME_EXISTS', error: '用户名已存在' });
+      }
+
+      const { data: user, error: createError } = await supabase
+        .from('users')
+        .insert({
+          username,
+          nickname: username,
+          bio: bio || '欢迎使用 Mutual',
+          avatar: avatar || '',
+          public_key: publicKey
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        throw createError;
+      }
+
+      res.json({ 
+        success: true, 
+        cid,
+        profile: user 
+      });
+    } else {
+      // 如果没有 Supabase，添加到内存用户列表
+      users.add(username);
+      res.json({ 
+        success: true, 
+        cid,
+        profile 
+      });
+    }
+  } catch (error) {
+    console.error('创建资料错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/profile', async (req, res) => {
+  try {
+    const { username } = req.query;
+    
+    if (supabase) {
+      let query = supabase.from('users').select('*');
+      
+      if (username) {
+        query = query.eq('username', username);
+      }
+      
+      const { data: users, error } = await query;
+
+      if (error) {
+        throw error;
+      }
+
+      res.json({ success: true, users });
+    } else {
+      // 如果没有 Supabase，返回内存中的用户信息
+      const userList = Array.from(users);
+      const filteredUsers = username ? userList.filter(u => u === username).map(u => ({ username: u })) : userList.map(u => ({ username: u }));
+      res.json({ success: true, users: filteredUsers });
+    }
+  } catch (error) {
+    console.error('获取用户信息错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/subscribe', async (req, res) => {
+  const { topic = 'social-tweets' } = req.query;
+  
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const interval = setInterval(() => {
+    try {
+      res.write('data: {"type": "ping"}\n\n');
+    } catch (error) {
+      clearInterval(interval);
+    }
+  }, 30000);
+
+  req.on('close', () => {
+    clearInterval(interval);
+  });
 });
 
 export default app;
