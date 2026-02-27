@@ -291,8 +291,7 @@ app.get('/api/offline-messages/:username', async (req, res) => {
       const { data: dbMessages, error } = await supabase
         .from('messages')
         .select('*')
-        .or(`and(from_user.eq.${username},to_user.eq.${username})`)
-        .or(`to_user.in.(${groupIds.join(',')})`)
+        .or(`to_user.eq.${username},to_user.in.(${groupIds.join(',')})`)
         .order('timestamp', { ascending: true });
 
       if (error) {

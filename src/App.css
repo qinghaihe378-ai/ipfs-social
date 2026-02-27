@@ -3183,6 +3183,12 @@ body {
   align-items: center;
   padding: var(--spacing-card) var(--spacing-page);
   border-bottom: 1px solid var(--divider-alpha);
+  transition: all 0.3s ease;
+}
+
+.result-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
 }
 
 .result-avatar {
@@ -3198,6 +3204,13 @@ body {
   color: #fff;
   margin-right: 12px;
   box-shadow: 0 0 12px rgba(124, 58, 237, 0.3);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.result-avatar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 16px rgba(124, 58, 237, 0.5);
 }
 
 .result-info {
@@ -3229,7 +3242,32 @@ body {
   }
 
   .add-btn:hover {
-    background: #06ad56;
+    background: #06b356;
+  }
+
+  .result-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .view-profile-btn {
+    background: transparent;
+    border: 1px solid #ddd;
+    color: #666;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+  }
+
+  .view-profile-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #07c160;
+    color: #07c160;
   }
 
   .settings-page {

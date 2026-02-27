@@ -530,10 +530,13 @@ function App() {
     }
   };
 
-  // 定期检查新的好友申请
+  // 定期检查新的好友申请和群组更新
   useEffect(() => {
     if (isLoggedIn && username) {
-      const interval = setInterval(checkForNewFriendRequests, 30000); // 每30秒检查一次
+      const interval = setInterval(async () => {
+        await checkForNewFriendRequests();
+        await loadGroups(); // 同时检查群组更新
+      }, 30000); // 每30秒检查一次
       return () => clearInterval(interval);
     }
   }, [isLoggedIn, username]);
@@ -2206,22 +2209,51 @@ function App() {
               <div className="search-result">
                 <div className="result-header">搜索结果</div>
                 <div className="result-item">
-                  <div className="result-avatar">
+                  <div 
+                    className="result-avatar"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFriend({ username: searchResult.username });
+                      setShowFriendProfile(true);
+                      setShowAddFriend(false);
+                    }}
+                  >
                     {getInitial(searchResult.username)}
                   </div>
-                  <div className="result-info">
+                  <div 
+                    className="result-info"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFriend({ username: searchResult.username });
+                      setShowFriendProfile(true);
+                      setShowAddFriend(false);
+                    }}
+                  >
                     <div className="result-name">{searchResult.username}</div>
                     <div className="result-id">Mutual ID: {searchResult.username}</div>
                   </div>
-                  <button 
-                    className="add-btn"
-                    onClick={() => {
-                      setFriendUsername(searchResult.username);
-                      addFriend();
-                    }}
-                  >
-                    添加到通讯录
-                  </button>
+                  <div className="result-actions">
+                    <button 
+                      className="view-profile-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFriend({ username: searchResult.username });
+                        setShowFriendProfile(true);
+                        setShowAddFriend(false);
+                      }}
+                    >
+                      查看资料
+                    </button>
+                    <button 
+                      className="add-btn"
+                      onClick={() => {
+                        setFriendUsername(searchResult.username);
+                        addFriend();
+                      }}
+                    >
+                      添加到通讯录
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
