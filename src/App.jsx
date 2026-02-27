@@ -38,6 +38,7 @@ function App() {
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [language, setLanguage] = useState(localStorage.getItem('language') || 'zh');
   const [showLanguageSelect, setShowLanguageSelect] = useState(false);
+  const [searchResult, setSearchResult] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -335,6 +336,27 @@ function App() {
     localStorage.setItem('friends', JSON.stringify(updatedFriends));
   };
 
+  const [friendRequests, setFriendRequests] = useState([]);
+  const [showFriendRequests, setShowFriendRequests] = useState(false);
+
+  useEffect(() => {
+    if (isLoggedIn && username) {
+      loadFriendRequests();
+    }
+  }, [isLoggedIn, username]);
+
+  const loadFriendRequests = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/friend-requests/${encodeURIComponent(username)}`);
+      const data = await response.json();
+      if (data.success) {
+        setFriendRequests(data.requests);
+      }
+    } catch (error) {
+      console.error('加载好友申请失败:', error);
+    }
+  };
+
   const addFriend = async () => {
     if (!friendUsername.trim()) {
       alert('请输入好友用户名');
@@ -364,27 +386,67 @@ function App() {
         alert('该用户不存在，请确认用户名正确');
         return;
       }
+
+      // 发送好友申请
+      const requestResponse = await fetch(`${API_BASE}/api/send-friend-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          from: username, 
+          to: friendUsername 
+        })
+      });
       
-      if (!data.online) {
-        alert('该用户不在线，添加后可以发送离线消息');
-        // 即使用户不在线，也允许添加好友
+      const requestData = await requestResponse.json();
+      
+      if (requestData.success) {
+        setFriendUsername('');
+        setShowAddFriend(false);
+        alert('好友申请已发送！');
+      } else {
+        alert('发送好友申请失败: ' + (requestData.error || '未知错误'));
       }
-
-      const newFriend = {
-        username: friendUsername,
-        publicKey: Math.random().toString(36).substring(2, 15),
-        addedAt: Date.now()
-      };
-
-      const updatedFriends = [...friends, newFriend];
-      setFriends(updatedFriends);
-      localStorage.setItem('friends', JSON.stringify(updatedFriends));
-      setFriendUsername('');
-      setShowAddFriend(false);
-      alert('好友添加成功！');
     } catch (error) {
       console.error('添加好友失败:', error);
       alert('添加好友失败');
+    }
+  };
+
+  const respondToFriendRequest = async (requestId, action) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/respond-friend-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          requestId, 
+          username, 
+          action 
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        if (action === 'accept') {
+          // 添加到好友列表
+          const newFriend = {
+            username: data.request.from,
+            publicKey: Math.random().toString(36).substring(2, 15),
+            addedAt: Date.now()
+          };
+          const updatedFriends = [...friends, newFriend];
+          setFriends(updatedFriends);
+          localStorage.setItem('friends', JSON.stringify(updatedFriends));
+          alert('已添加好友！');
+        }
+        // 更新好友申请列表
+        setFriendRequests(prev => prev.filter(req => req.id !== requestId));
+      } else {
+        alert('处理好友申请失败: ' + (data.error || '未知错误'));
+      }
+    } catch (error) {
+      console.error('处理好友申请失败:', error);
+      alert('处理好友申请失败');
     }
   };
 
@@ -394,6 +456,20 @@ function App() {
       setMessages(JSON.parse(savedMessages));
     }
   };
+
+  const checkForNewFriendRequests = async () => {
+    if (isLoggedIn && username) {
+      await loadFriendRequests();
+    }
+  };
+
+  // 定期检查新的好友申请
+  useEffect(() => {
+    if (isLoggedIn && username) {
+      const interval = setInterval(checkForNewFriendRequests, 30000); // 每30秒检查一次
+      return () => clearInterval(interval);
+    }
+  }, [isLoggedIn, username]);
 
   const loadTweets = async () => {
     try {
@@ -978,7 +1054,7 @@ function App() {
               </div>
               
               <div className="contacts-list">
-                <div className="contact-item" onClick={() => {}}>
+                <div className="contact-item" onClick={() => setShowFriendRequests(true)}>
                   <div className="contact-icon orange">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                       <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
@@ -986,6 +1062,9 @@ function App() {
                   </div>
                   <div className="contact-info">
                     <div className="contact-name">新的朋友</div>
+                    {friendRequests.length > 0 && (
+                      <div className="contact-badge">{friendRequests.length}</div>
+                    )}
                   </div>
                 </div>
                 <div className="contact-item" onClick={() => {}}>
@@ -1801,9 +1880,29 @@ function App() {
               </div>
               <button 
                 className="search-btn"
-                onClick={() => {
+                onClick={async () => {
                   if (friendUsername.trim()) {
-                    alert(`搜索用户: ${friendUsername}`);
+                    try {
+                      const response = await fetch(`${API_BASE}/api/check-user-online`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: friendUsername })
+                      });
+                      
+                      const data = await response.json();
+                      
+                      if (data.exists) {
+                        setSearchResult({ username: friendUsername });
+                        alert(`用户 ${friendUsername} 已找到`);
+                      } else {
+                        setSearchResult(null);
+                        alert(`用户 ${friendUsername} 不存在`);
+                      }
+                    } catch (error) {
+                      console.error('搜索用户失败:', error);
+                      setSearchResult(null);
+                      alert('搜索用户失败');
+                    }
                   }
                 }}
               >
@@ -1823,20 +1922,23 @@ function App() {
               </div>
             </div>
 
-            {friendUsername.trim() && (
+            {searchResult && (
               <div className="search-result">
                 <div className="result-header">搜索结果</div>
                 <div className="result-item">
                   <div className="result-avatar">
-                    {friendUsername.charAt(0).toUpperCase()}
+                    {searchResult.username.charAt(0).toUpperCase()}
                   </div>
                   <div className="result-info">
-                    <div className="result-name">{friendUsername}</div>
-                    <div className="result-id">Mutual ID: {friendUsername}</div>
+                    <div className="result-name">{searchResult.username}</div>
+                    <div className="result-id">Mutual ID: {searchResult.username}</div>
                   </div>
                   <button 
                     className="add-btn"
-                    onClick={addFriend}
+                    onClick={() => {
+                      setFriendUsername(searchResult.username);
+                      addFriend();
+                    }}
                   >
                     添加到通讯录
                   </button>
@@ -1931,6 +2033,56 @@ function App() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 好友申请页面 */}
+      {showFriendRequests && (
+        <div className="friend-requests-page">
+          <div className="friend-requests-header">
+            <button className="back-btn" onClick={() => setShowFriendRequests(false)}>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+              </svg>
+            </button>
+            <div className="friend-requests-title">好友申请</div>
+            <div className="header-placeholder"></div>
+          </div>
+
+          <div className="friend-requests-content">
+            {friendRequests.length === 0 ? (
+              <div className="empty-state">
+                <p>暂无好友申请</p>
+              </div>
+            ) : (
+              friendRequests.map(request => (
+                <div key={request.id} className="friend-request-item">
+                  <div className="request-avatar">
+                    {request.from.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="request-info">
+                    <div className="request-name">{request.from}</div>
+                    <div className="request-message">{request.message || '请求添加您为好友'}</div>
+                    <div className="request-time">{formatDate(request.createdAt)}</div>
+                  </div>
+                  <div className="request-actions">
+                    <button 
+                      className="request-action-btn accept-btn"
+                      onClick={() => respondToFriendRequest(request.id, 'accept')}
+                    >
+                      接受
+                    </button>
+                    <button 
+                      className="request-action-btn reject-btn"
+                      onClick={() => respondToFriendRequest(request.id, 'reject')}
+                    >
+                      拒绝
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

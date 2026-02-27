@@ -17,6 +17,8 @@ const onlineUsers = new Map();
 const offlineMessages = new Map();
 const groups = new Map();
 const tweets = [];
+const friendRequests = new Map();
+const users = new Set();
 
 console.log('服务器初始化中...');
 console.log('Supabase连接状态:', supabase ? '已配置' : '未配置');
@@ -72,6 +74,9 @@ app.post('/api/user-online', async (req, res) => {
     online: true
   });
 
+  // 添加到用户列表
+  users.add(username);
+
   res.json({ success: true, username });
 });
 
@@ -83,22 +88,20 @@ app.post('/api/check-user-online', async (req, res) => {
   }
 
   try {
-    if (!supabase) {
-      return res.json({ 
-        online: false, 
-        exists: false,
-        username,
-        lastSeen: null
-      });
-    }
+    let userExists = false;
     
-    const { data: existingUser, error } = await supabase
-      .from('users')
-      .select('id')
-      .eq('username', username)
-      .single();
+    if (supabase) {
+      const { data: existingUser, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', username)
+        .single();
 
-    const userExists = !error && existingUser !== null;
+      userExists = !error && existingUser !== null;
+    } else {
+      // 在 Supabase 未配置时，使用内存中的用户列表
+      userExists = users.has(username);
+    }
     
     const user = onlineUsers.get(username);
     const isOnline = user && (Date.now() - user.lastSeen) < 60000;
@@ -241,6 +244,203 @@ app.post('/api/mark-read', async (req, res) => {
     res.json({ success: true, markedCount: messageIds.length });
   } catch (error) {
     console.error('标记已读错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/send-friend-request', async (req, res) => {
+  const { from, to, message } = req.body;
+  
+  if (!from || !to) {
+    return res.status(400).json({ error: '缺少必要字段' });
+  }
+
+  try {
+    let userExists = true;
+
+    // 检查目标用户是否存在
+    if (supabase) {
+      const { data: targetUser, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', to)
+        .single();
+
+      if (userError || !targetUser) {
+        return res.status(404).json({ error: '目标用户不存在' });
+      }
+    }
+
+    const request = {
+      id: Date.now().toString(),
+      from,
+      to,
+      message: message || '',
+      status: 'pending',
+      createdAt: Date.now()
+    };
+
+    // 存储好友申请
+    if (supabase) {
+      try {
+        await supabase
+          .from('friend_requests')
+          .insert(request);
+      } catch (dbError) {
+        console.warn('数据库存储好友申请失败:', dbError.message);
+      }
+    }
+
+    // 存储到内存中
+    const userRequests = friendRequests.get(to) || [];
+    userRequests.push(request);
+    friendRequests.set(to, userRequests);
+
+    res.json({ 
+      success: true, 
+      request 
+    });
+  } catch (error) {
+    console.error('发送好友申请错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/friend-requests/:username', async (req, res) => {
+  const { username } = req.params;
+  
+  try {
+    let requests = [];
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .select('*')
+        .eq('to', username)
+        .eq('status', 'pending')
+        .order('createdAt', { ascending: false });
+
+      if (error) {
+        console.warn('获取好友申请失败:', error.message);
+      } else {
+        requests = data;
+      }
+    } else {
+      // 从内存中获取
+      requests = friendRequests.get(username) || [];
+      requests = requests.filter(r => r.status === 'pending');
+    }
+
+    res.json({ 
+      success: true, 
+      requests 
+    });
+  } catch (error) {
+    console.error('获取好友申请错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/respond-friend-request', async (req, res) => {
+  const { requestId, username, action } = req.body;
+  
+  if (!requestId || !username || !action || !['accept', 'reject'].includes(action)) {
+    return res.status(400).json({ error: '缺少必要字段或参数错误' });
+  }
+
+  try {
+    let request = null;
+
+    if (supabase) {
+      // 从数据库获取申请
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .select('*')
+        .eq('id', requestId)
+        .eq('to', username)
+        .single();
+
+      if (error || !data) {
+        return res.status(404).json({ error: '好友申请不存在' });
+      }
+
+      request = data;
+
+      // 更新申请状态
+      await supabase
+        .from('friend_requests')
+        .update({ status: action === 'accept' ? 'accepted' : 'rejected' })
+        .eq('id', requestId);
+    } else {
+      // 从内存中获取
+      const userRequests = friendRequests.get(username) || [];
+      request = userRequests.find(r => r.id === requestId);
+
+      if (!request) {
+        return res.status(404).json({ error: '好友申请不存在' });
+      }
+
+      request.status = action === 'accept' ? 'accepted' : 'rejected';
+    }
+
+    if (action === 'accept' && request) {
+      // 如果接受申请，创建好友关系
+      if (supabase) {
+        try {
+          // 为双方创建好友记录
+          await supabase
+            .from('friends')
+            .insert([
+              { user1: request.from, user2: request.to, status: 'active', createdAt: Date.now() },
+              { user1: request.to, user2: request.from, status: 'active', createdAt: Date.now() }
+            ]);
+        } catch (dbError) {
+          console.warn('创建好友关系失败:', dbError.message);
+        }
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      action, 
+      request 
+    });
+  } catch (error) {
+    console.error('响应好友申请错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/cancel-friend-request', async (req, res) => {
+  const { requestId, username } = req.body;
+  
+  if (!requestId || !username) {
+    return res.status(400).json({ error: '缺少必要字段' });
+  }
+
+  try {
+    if (supabase) {
+      const { error } = await supabase
+        .from('friend_requests')
+        .delete()
+        .eq('id', requestId)
+        .eq('from', username);
+
+      if (error) {
+        console.warn('取消好友申请失败:', error.message);
+      }
+    } else {
+      // 从内存中删除
+      const userRequests = friendRequests.get(username) || [];
+      const filteredRequests = userRequests.filter(r => r.id !== requestId);
+      friendRequests.set(username, filteredRequests);
+    }
+
+    res.json({ 
+      success: true 
+    });
+  } catch (error) {
+    console.error('取消好友申请错误:', error);
     res.status(500).json({ error: error.message });
   }
 });
