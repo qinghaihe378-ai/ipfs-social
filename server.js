@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import { create } from 'ipfs-http-client';
 import { createClient } from '@supabase/supabase-js';
 
 const app = express();
@@ -14,36 +13,19 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-let ipfs;
 const onlineUsers = new Map();
 const offlineMessages = new Map();
 const groups = new Map();
 const tweets = [];
 
-async function initIPFS() {
-  try {
-    ipfs = await create({ 
-      url: process.env.IPFS_URL || 'http://localhost:5001/api/v0',
-      timeout: 5000
-    });
-    console.log('IPFS 节点已连接');
-    
-    try {
-      const id = await ipfs.id();
-      console.log('节点 ID:', id.id);
-    } catch (idError) {
-      console.warn('无法获取节点 ID，但连接已建立:', idError.message);
-    }
-  } catch (error) {
-    console.warn('连接 IPFS 失败 (非关键):', error.message);
-    ipfs = null;
-  }
-}
+console.log('服务器初始化中...');
+console.log('Supabase连接状态:', supabase ? '已配置' : '未配置');
+console.log('IPFS功能: 在Railway环境中暂时禁用');
 
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    ipfsConnected: !!ipfs,
+    ipfsConnected: false,
     env: {
       supabaseUrl: process.env.SUPABASE_URL ? 'set' : 'not set',
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY ? 'set' : 'not set'
@@ -473,24 +455,9 @@ app.post('/api/profile', async (req, res) => {
       throw createError;
     }
 
-    let cid = null;
-    if (ipfs) {
-      try {
-        const userData = JSON.stringify(user);
-        const result = await ipfs.add(userData);
-        cid = result.cid.toString();
-        console.log('用户资料已上传到 IPFS:', cid);
-      } catch (ipfsError) {
-        console.warn('IPFS 上传失败:', ipfsError.message);
-        cid = `ipfs-user-${username}-${Date.now()}`;
-      }
-    } else {
-      cid = `ipfs-user-${username}-${Date.now()}`;
-    }
-
     res.json({ 
       success: true, 
-      cid,
+      cid: `ipfs-user-${username}-${Date.now()}`,
       profile: user 
     });
   } catch (error) {
@@ -546,8 +513,7 @@ app.get('/api/subscribe', async (req, res) => {
   });
 });
 
-initIPFS().finally(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`服务器运行在 http://0.0.0.0:${PORT}`);
-  });
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`服务器运行在 http://0.0.0.0:${PORT}`);
+  console.log('API服务已就绪');
 });
