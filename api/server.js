@@ -11,9 +11,9 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(bodyParser.json());
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 let ipfs;
 const onlineUsers = new Map();
@@ -53,6 +53,10 @@ app.post('/api/check-username', async (req, res) => {
   }
 
   try {
+    if (!supabase) {
+      return res.json({ exists: false, username });
+    }
+    
     const { data: existingUser, error } = await supabase
       .from('users')
       .select('id')
@@ -507,6 +511,10 @@ app.get('/api/tweet/:cid', async (req, res) => {
 
 app.post('/api/profile', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase 未配置' });
+    }
+    
     const { username, bio, avatar, publicKey } = req.body;
     
     if (!username || !publicKey) {
@@ -557,6 +565,10 @@ app.post('/api/profile', async (req, res) => {
 app.get('/api/profile', async (req, res) => {
   try {
     const { username } = req.query;
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase 未配置' });
+    }
     
     let query = supabase.from('users').select('*');
     
@@ -630,6 +642,8 @@ app.get('/api/subscribe', async (req, res) => {
   }
 });
 
+// 启动 IPFS 初始化（非阻塞）
 initIPFS().catch(console.error);
 
+// 立即导出应用
 export default app;
