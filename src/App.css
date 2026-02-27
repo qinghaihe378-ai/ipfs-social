@@ -39,6 +39,17 @@
 }
 
 * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+* {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -702,19 +713,19 @@ body {
     bottom: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(180deg, rgba(18, 18, 24, 0.85) 0%, rgba(12, 12, 16, 0.95) 100%);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: linear-gradient(180deg, rgba(18, 18, 24, 0.9) 0%, rgba(12, 12, 16, 0.98) 100%);
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
     border-top: none;
     z-index: 100;
     justify-content: space-around;
-    padding: 12px 16px;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
-    height: 80px;
+    padding: 6px 12px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    min-height: 56px;
     box-shadow: 
-      0 -1px 0 0 rgba(255, 255, 255, 0.05),
-      0 -4px 24px -4px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+      0 -1px 0 0 rgba(255, 255, 255, 0.08),
+      0 -8px 32px -8px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
   }
 
   .mobile-nav::before {
@@ -738,13 +749,13 @@ body {
     border: none;
     color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
-    padding: 8px 16px;
+    padding: 4px 8px;
     border-radius: 16px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
     flex: 1;
     min-width: 0;
     position: relative;
@@ -774,8 +785,8 @@ body {
   }
 
   .mobile-nav-item svg {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     display: block;
     stroke-width: 1.5;
     transition: all 0.3s ease;
@@ -856,10 +867,11 @@ body {
   }
 
   .mobile-nav-item span {
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 400;
     line-height: 1;
-    letter-spacing: 0.3px;
+    letter-spacing: 0;
+    white-space: nowrap;
   }
 
   .compose-btn {
@@ -1499,13 +1511,14 @@ body {
 .contacts-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   padding: var(--spacing-card) var(--spacing-page);
   background: rgba(26, 26, 26, 0.6);
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border-bottom: 1px solid var(--divider-alpha);
   height: 56px;
+  position: relative;
 }
 
 .contacts-title {
@@ -1658,13 +1671,14 @@ body {
 .messages-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   padding: var(--spacing-card) var(--spacing-page);
   background: rgba(26, 26, 26, 0.6);
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border-bottom: 1px solid var(--divider-alpha);
   height: 56px;
+  position: relative;
 }
 
 .messages-title {
@@ -1792,13 +1806,14 @@ body {
 .wechat-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   padding: var(--spacing-card) var(--spacing-page);
   background: rgba(26, 26, 26, 0.6);
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border-bottom: 1px solid var(--divider-alpha);
   height: 56px;
+  position: relative;
 }
 
 .wechat-title {
@@ -3586,9 +3601,9 @@ body {
   border-top: none;
   z-index: 100;
   justify-content: space-around;
-  padding: 8px 16px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom));
-  height: 64px;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  min-height: 72px;
   box-shadow: 
     0 -1px 0 0 rgba(255, 255, 255, 0.05),
     0 -4px 24px -4px rgba(0, 0, 0, 0.4),
@@ -3965,4 +3980,458 @@ body {
 .create-group-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ========================================
+   统一移动端适配 - 所有页面
+   ======================================== */
+
+@media (max-width: 768px) {
+  .explore-content,
+  .notifications-content,
+  .bookmarks-content,
+  .profile-content,
+  .messages-content,
+  .contacts-content,
+  .wechat-content {
+    height: calc(100vh - env(safe-area-inset-bottom));
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .explore-header,
+  .messages-header,
+  .contacts-header,
+  .wechat-header,
+  .profile-page-header {
+    padding: 12px 16px;
+    height: auto;
+    min-height: 56px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+
+  .explore-title,
+  .messages-title,
+  .contacts-title,
+  .wechat-title,
+  .profile-page-title {
+    font-size: clamp(18px, 5vw, 22px);
+  }
+
+  .moments-list,
+  .messages-list,
+  .contacts-list {
+    padding: 8px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .moment-item,
+  .message-item,
+  .contact-item {
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+
+  .moment-avatar,
+  .message-avatar,
+  .contact-avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .moment-author,
+  .message-name,
+  .contact-name {
+    font-size: clamp(15px, 4vw, 17px);
+  }
+
+  .moment-text,
+  .message-preview {
+    font-size: clamp(13px, 3.5vw, 15px);
+  }
+
+  .profile-card {
+    padding: 16px;
+    margin: 8px;
+  }
+
+  .profile-card-avatar,
+  .profile-card-avatar-img {
+    width: 56px;
+    height: 56px;
+    font-size: 24px;
+  }
+
+  .profile-card-name {
+    font-size: clamp(16px, 4.5vw, 18px);
+  }
+
+  .profile-section {
+    margin: 8px;
+  }
+
+  .profile-item {
+    padding: 14px 16px;
+  }
+
+  .profile-item-text {
+    font-size: clamp(15px, 4vw, 16px);
+  }
+
+  .add-friend-page,
+  .friend-profile-page,
+  .profile-edit-page,
+  .settings-page,
+  .wallet-page,
+  .language-select-page,
+  .friend-requests-page {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .add-friend-header,
+  .friend-profile-header,
+  .profile-edit-header,
+  .settings-header,
+  .wallet-page-header,
+  .language-select-header,
+  .friend-requests-header {
+    height: auto;
+    min-height: 56px;
+    padding: 12px 16px;
+  }
+
+  .add-friend-title,
+  .friend-profile-title,
+  .profile-edit-title,
+  .settings-title,
+  .wallet-page-title,
+  .language-select-title,
+  .friend-requests-title {
+    font-size: clamp(16px, 4.5vw, 18px);
+  }
+
+  .add-friend-content,
+  .friend-profile-content,
+  .profile-edit-content,
+  .settings-content,
+  .wallet-page-content,
+  .language-select-content,
+  .friend-requests-content {
+    padding: 8px;
+  }
+
+  .search-section,
+  .search-result,
+  .friend-profile-card,
+  .friend-profile-section,
+  .profile-edit-item,
+  .settings-section,
+  .language-item,
+  .friend-request-item {
+    margin: 8px;
+    padding: 12px;
+  }
+
+  .search-input-friend,
+  .edit-input,
+  .login-input {
+    font-size: clamp(14px, 4vw, 16px);
+    padding: 14px 16px;
+  }
+
+  .search-btn,
+  .save-btn,
+  .create-group-btn,
+  .login-button {
+    padding: 16px;
+    font-size: clamp(15px, 4vw, 17px);
+    min-height: 52px;
+  }
+
+  .add-btn,
+  .view-profile-btn,
+  .request-action-btn {
+    padding: 10px 16px;
+    font-size: clamp(13px, 3.5vw, 15px);
+    min-height: 44px;
+  }
+
+  .friend-action-btn {
+    padding: 14px 16px;
+    font-size: clamp(14px, 4vw, 16px);
+    min-height: 48px;
+  }
+
+  .friend-profile-avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 26px;
+  }
+
+  .friend-profile-name {
+    font-size: clamp(17px, 5vw, 20px);
+  }
+
+  .result-avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+
+  .result-name {
+    font-size: clamp(15px, 4vw, 17px);
+  }
+
+  .login-container {
+    width: calc(100% - 32px);
+    max-width: 360px;
+    padding: 32px 24px;
+    margin: 16px;
+  }
+
+  .login-title {
+    font-size: clamp(20px, 6vw, 24px);
+  }
+
+  .chat-view.mobile-chat {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  .chat-header {
+    height: auto;
+    min-height: 56px;
+    padding: 12px 16px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+
+  .chat-username {
+    font-size: clamp(16px, 4.5vw, 18px);
+  }
+
+  .chat-messages {
+    padding: 12px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .chat-message {
+    max-width: 80%;
+  }
+
+  .message-content {
+    padding: 10px 14px;
+    font-size: clamp(14px, 4vw, 16px);
+  }
+
+  .chat-input {
+    padding: 10px 12px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    height: auto;
+    min-height: 60px;
+  }
+
+  .chat-input input {
+    padding: 12px 14px;
+    font-size: clamp(14px, 4vw, 16px);
+  }
+
+  .chat-send-btn {
+    padding: 12px 18px;
+    font-size: clamp(13px, 3.5vw, 15px);
+    min-height: 44px;
+  }
+
+  .emoji-picker {
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    padding: 12px;
+  }
+
+  .emoji-grid {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+
+  .emoji-item {
+    font-size: 20px;
+    padding: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .explore-content,
+  .notifications-content,
+  .bookmarks-content,
+  .profile-content,
+  .messages-content,
+  .contacts-content,
+  .wechat-content {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .explore-header,
+  .messages-header,
+  .contacts-header,
+  .wechat-header,
+  .profile-page-header {
+    padding: 10px 12px;
+  }
+
+  .moments-list,
+  .messages-list,
+  .contacts-list {
+    padding: 6px;
+  }
+
+  .moment-item,
+  .message-item,
+  .contact-item {
+    padding: 10px;
+    margin-bottom: 6px;
+  }
+
+  .moment-avatar,
+  .message-avatar,
+  .contact-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+  }
+
+  .profile-card {
+    padding: 12px;
+    margin: 6px;
+  }
+
+  .profile-card-avatar,
+  .profile-card-avatar-img {
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+
+  .profile-section {
+    margin: 6px;
+  }
+
+  .profile-item {
+    padding: 12px 14px;
+  }
+
+  .search-section,
+  .search-result,
+  .friend-profile-card,
+  .friend-profile-section,
+  .profile-edit-item,
+  .settings-section,
+  .language-item,
+  .friend-request-item {
+    margin: 6px;
+    padding: 10px;
+  }
+
+  .friend-profile-avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 22px;
+  }
+
+  .chat-messages {
+    padding: 10px;
+  }
+
+  .chat-message {
+    max-width: 85%;
+  }
+
+  .message-content {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
+  .emoji-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .login-container {
+    padding: 24px 20px;
+  }
+}
+
+@media (max-width: 360px) {
+  .explore-title,
+  .messages-title,
+  .contacts-title,
+  .wechat-title,
+  .profile-page-title {
+    font-size: 16px;
+  }
+
+  .moment-avatar,
+  .message-avatar,
+  .contact-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 12px;
+  }
+
+  .moment-author,
+  .message-name,
+  .contact-name {
+    font-size: 14px;
+  }
+
+  .moment-text,
+  .message-preview {
+    font-size: 12px;
+  }
+
+  .profile-card-avatar,
+  .profile-card-avatar-img {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+
+  .profile-card-name {
+    font-size: 15px;
+  }
+
+  .profile-item {
+    padding: 10px 12px;
+  }
+
+  .profile-item-text {
+    font-size: 14px;
+  }
+
+  .chat-message {
+    max-width: 90%;
+  }
+
+  .message-content {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .chat-input input {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .chat-send-btn {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .emoji-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .emoji-item {
+    font-size: 18px;
+    padding: 4px;
+  }
 }

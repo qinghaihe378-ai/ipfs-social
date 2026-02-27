@@ -45,7 +45,8 @@
 }
 
 .bot-container {
-  max-width: 480px;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
   padding: 0;
   min-height: 100vh;
@@ -54,6 +55,7 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro', 'Roboto', sans-serif;
   position: relative;
   overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .bot-container::before {
@@ -84,7 +86,7 @@
 
 .bot-header h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: clamp(18px, 5vw, 22px);
   font-weight: 600;
   background: var(--purple-white-gradient);
   -webkit-background-clip: text;
@@ -103,13 +105,16 @@
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--divider-alpha);
-  padding: 8px var(--spacing-element);
+  padding: 10px 12px;
   border-radius: var(--radius-tag);
-  font-size: 12px;
+  font-size: clamp(11px, 3vw, 14px);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
   color: var(--text-primary);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
 }
 
 .wallet-address:hover {
@@ -120,15 +125,16 @@
 
 .connect-wallet-btn {
   background: var(--primary-gradient);
-  padding: 8px var(--spacing-page);
+  padding: 12px 20px;
   border-radius: var(--radius-button);
-  font-size: 13px;
+  font-size: clamp(13px, 3.5vw, 15px);
   font-weight: 500;
   cursor: pointer;
   border: none;
   color: #fff;
   transition: all 0.3s ease;
   box-shadow: var(--shadow-light), var(--shadow-glow);
+  min-height: 44px;
 }
 
 .connect-wallet-btn:hover {
@@ -141,8 +147,11 @@
   flex-direction: column;
   gap: var(--spacing-card);
   padding: var(--spacing-page);
+  padding-bottom: calc(var(--spacing-page) + 100px);
   position: relative;
   z-index: 1;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .network-balance-section {
@@ -281,11 +290,13 @@
   background: rgba(12, 12, 12, 0.6);
   border: 1px solid var(--divider-alpha);
   border-radius: var(--radius-input);
-  padding: var(--spacing-card) var(--spacing-page);
+  padding: 14px 16px;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: clamp(14px, 4vw, 16px);
   outline: none;
   transition: all 0.3s ease;
+  min-height: 48px;
+  width: 100%;
 }
 
 .contract-address-input:focus {
@@ -298,16 +309,18 @@
 }
 
 .load-button {
-  padding: var(--spacing-card) 28px;
+  padding: 14px 28px;
   background: var(--primary-gradient);
   border: none;
   border-radius: var(--radius-button);
   color: #fff;
-  font-size: 15px;
+  font-size: clamp(14px, 4vw, 16px);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: var(--shadow-light), var(--shadow-glow);
+  min-height: 48px;
+  white-space: nowrap;
 }
 
 .load-button:hover:not(:disabled) {
@@ -668,15 +681,16 @@
 .amount-button,
 .percentage-button {
   flex: 1;
-  padding: var(--spacing-element) 8px;
+  padding: 12px 8px;
   background: rgba(12, 12, 12, 0.4);
   border: 1px solid var(--divider-alpha);
   border-radius: var(--radius-tag);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: clamp(12px, 3.5vw, 14px);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-height: 44px;
 }
 
 .amount-button:hover,
@@ -726,15 +740,16 @@
 .buy-button,
 .sell-button {
   width: 100%;
-  padding: var(--spacing-card);
+  padding: 16px;
   border: none;
   border-radius: var(--radius-button);
-  font-size: 15px;
+  font-size: clamp(15px, 4vw, 17px);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  min-height: 52px;
 }
 
 .buy-button {
@@ -801,16 +816,16 @@
 }
 
 .command-history::-webkit-scrollbar {
-  width: 4px;
+  display: none;
+  width: 0;
 }
 
 .command-history::-webkit-scrollbar-track {
-  background: transparent;
+  display: none;
 }
 
 .command-history::-webkit-scrollbar-thumb {
-  background: var(--divider-alpha);
-  border-radius: 2px;
+  display: none;
 }
 
 .no-commands {
@@ -943,8 +958,12 @@
     max-width: 100%;
   }
 
+  .bot-header {
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+
   .bot-header h2 {
-    font-size: 18px;
+    font-size: clamp(16px, 5vw, 20px);
   }
 
   .trade-section {
@@ -957,15 +976,16 @@
   }
 
   .price-value {
-    font-size: 18px;
+    font-size: clamp(16px, 5vw, 20px);
   }
 
   .token-symbol {
-    font-size: 18px;
+    font-size: clamp(16px, 5vw, 20px);
   }
 
   .bot-content {
-    padding: var(--spacing-page);
+    padding: 12px;
+    padding-bottom: calc(12px + 56px + env(safe-area-inset-bottom));
     gap: var(--spacing-card);
   }
 
@@ -976,7 +996,135 @@
   .bot-section,
   .token-input-section,
   .network-balance-section {
-    padding: var(--spacing-card);
+    padding: 12px;
     border-radius: var(--radius-card);
+  }
+
+  .contract-input {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .load-button {
+    width: 100%;
+  }
+
+  .amount-buttons,
+  .percentage-buttons {
+    flex-wrap: wrap;
+  }
+
+  .amount-button,
+  .percentage-button {
+    min-width: calc(25% - 6px);
+  }
+}
+
+@media (max-width: 480px) {
+  .bot-header {
+    padding: 12px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+
+  .bot-content {
+    padding: 10px;
+    padding-bottom: calc(10px + 56px + env(safe-area-inset-bottom));
+  }
+
+  .token-info-section,
+  .anti-rug-section,
+  .buy-section,
+  .sell-section,
+  .bot-section,
+  .token-input-section,
+  .network-balance-section {
+    padding: 10px;
+  }
+
+  .wallet-address {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .connect-wallet-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .balance-amount {
+    font-size: clamp(14px, 4vw, 16px);
+  }
+
+  .stat-value {
+    font-size: clamp(13px, 3.5vw, 15px);
+  }
+
+  .amount-button,
+  .percentage-button {
+    min-width: calc(50% - 4px);
+    padding: 10px 6px;
+    font-size: 12px;
+  }
+
+  .buy-button,
+  .sell-button {
+    padding: 14px;
+    font-size: 14px;
+    min-height: 48px;
+  }
+
+  .command-input-wrapper {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .command-send-btn {
+    width: 100%;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .bot-header h2 {
+    font-size: 16px;
+  }
+
+  .bot-header {
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+
+  .bot-content {
+    padding: 8px;
+    padding-bottom: calc(8px + 56px + env(safe-area-inset-bottom));
+  }
+
+  .token-info-section,
+  .anti-rug-section,
+  .buy-section,
+  .sell-section,
+  .bot-section,
+  .token-input-section,
+  .network-balance-section {
+    padding: 8px;
+  }
+
+  .wallet-address {
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+
+  .connect-wallet-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .contract-address-input {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  .load-button {
+    padding: 12px 20px;
+    font-size: 14px;
   }
 }

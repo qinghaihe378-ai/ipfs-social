@@ -1170,7 +1170,7 @@ function App() {
                 <>
                   <div className="wechat-header">
                     <div className="wechat-title">消息</div>
-                    <button className="wechat-add-btn" onClick={() => setShowAddFriend(true)}>
+                    <button className="wechat-add-btn" onClick={() => setShowAddFriend(true)} style={{ position: 'absolute', right: '16px' }}>
                       <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                       </svg>
@@ -1369,8 +1369,8 @@ function App() {
           {activeTab === 'contacts' && (
             <div className="contacts-content">
               <div className="contacts-header">
-                <div className="contacts-title">通讯录</div>
-                <button className="add-contact-btn" onClick={() => setShowAddFriend(true)}>
+                <div className="contacts-title">好友</div>
+                <button className="add-contact-btn" onClick={() => setShowAddFriend(true)} style={{ position: 'absolute', right: '16px' }}>
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                   </svg>
@@ -1891,9 +1891,9 @@ function App() {
         </button>
         <button className={`mobile-nav-item ${activeTab === 'contacts' ? 'active' : ''}`} onClick={() => setActiveTab('contacts')}>
           <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/>
+            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
           </svg>
-          <span>通讯录</span>
+          <span>好友</span>
         </button>
         <button className={`mobile-nav-item ${activeTab === 'explore' ? 'active' : ''}`} onClick={() => setActiveTab('explore')} style={{ display: 'none' }}>
           <svg viewBox="0 0 24 24" fill="currentColor">
@@ -2546,7 +2546,7 @@ function App() {
                         addFriend();
                       }}
                     >
-                      添加到通讯录
+                      添加好友
                     </button>
                   </div>
                 </div>
