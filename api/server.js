@@ -38,6 +38,21 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/api/env-test', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    env: {
+      NFT_STORAGE_API_KEY: process.env.NFT_STORAGE_API_KEY ? 'exists' : 'not exists',
+      SUPABASE_URL: process.env.SUPABASE_URL ? 'exists' : 'not exists',
+      SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'exists' : 'not exists',
+      NODE_ENV: process.env.NODE_ENV || 'not set',
+      PORT: process.env.PORT || 'not set'
+    },
+    nftstorage: !!nftstorage,
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.post('/api/check-username', async (req, res) => {
   const { username } = req.body;
   
