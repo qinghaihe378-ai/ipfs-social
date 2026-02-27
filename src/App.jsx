@@ -60,6 +60,7 @@ function App() {
       broadcastOnline();
       loadOfflineMessages();
       subscribeToMessages();
+      syncFriendsFromServer(); // 登录后立即同步好友列表
     }
   }, [isLoggedIn, username]);
 
@@ -82,9 +83,14 @@ function App() {
       
       if (data.success && data.messages.length > 0) {
         setMessages(prev => {
-          const newMessages = [...prev, ...data.messages];
-          localStorage.setItem('messages', JSON.stringify(newMessages));
-          return newMessages;
+          const existingIds = new Set(prev.map(m => m.id));
+          const newMessages = data.messages.filter(m => !existingIds.has(m.id));
+          if (newMessages.length > 0) {
+            const allMessages = [...prev, ...newMessages];
+            localStorage.setItem('messages', JSON.stringify(allMessages));
+            return allMessages;
+          }
+          return prev;
         });
       }
     } catch (error) {
@@ -96,16 +102,31 @@ function App() {
     const eventSource = new EventSource(`${API_BASE}/api/subscribe-messages/${username}`);
     
     eventSource.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      setMessages(prev => {
-        const exists = prev.some(m => m.id === message.id);
-        if (!exists) {
-          const updated = [...prev, message];
-          localStorage.setItem('messages', JSON.stringify(updated));
-          return updated;
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'friend_request') {
+          console.log('收到新的好友申请通知');
+          loadFriendRequests();
+        } else if (data.type === 'new_message') {
+          console.log('收到新消息通知');
+          loadOfflineMessages();
+        } else if (data.type === 'ping') {
+          // 忽略心跳
+        } else {
+          setMessages(prev => {
+            const exists = prev.some(m => m.id === data.id);
+            if (!exists) {
+              const updated = [...prev, data];
+              localStorage.setItem('messages', JSON.stringify(updated));
+              return updated;
+            }
+            return prev;
+          });
         }
-        return prev;
-      });
+      } catch (error) {
+        console.error('解析消息失败:', error);
+      }
     };
 
     eventSource.onerror = (error) => {
@@ -330,6 +351,26 @@ function App() {
     }
   };
 
+  const syncFriendsFromServer = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/friends/${encodeURIComponent(username)}`);
+      const data = await response.json();
+      
+      if (data.success && data.friends) {
+        const serverFriends = data.friends.map(f => ({
+          username: f.username,
+          publicKey: Math.random().toString(36).substring(2, 15),
+          addedAt: f.addedAt
+        }));
+        
+        setFriends(serverFriends);
+        localStorage.setItem('friends', JSON.stringify(serverFriends));
+      }
+    } catch (error) {
+      console.error('同步好友列表失败:', error);
+    }
+  };
+
   const removeFriend = (friendUsername) => {
     const updatedFriends = friends.filter(f => f.username !== friendUsername);
     setFriends(updatedFriends);
@@ -428,15 +469,8 @@ function App() {
       
       if (data.success) {
         if (action === 'accept') {
-          // 添加到好友列表
-          const newFriend = {
-            username: data.request.from,
-            publicKey: Math.random().toString(36).substring(2, 15),
-            addedAt: Date.now()
-          };
-          const updatedFriends = [...friends, newFriend];
-          setFriends(updatedFriends);
-          localStorage.setItem('friends', JSON.stringify(updatedFriends));
+          // 从服务器同步好友列表
+          await syncFriendsFromServer();
           alert('已添加好友！');
         }
         // 更新好友申请列表
@@ -467,6 +501,14 @@ function App() {
   useEffect(() => {
     if (isLoggedIn && username) {
       const interval = setInterval(checkForNewFriendRequests, 30000); // 每30秒检查一次
+      return () => clearInterval(interval);
+    }
+  }, [isLoggedIn, username]);
+
+  // 定期同步好友列表
+  useEffect(() => {
+    if (isLoggedIn && username) {
+      const interval = setInterval(syncFriendsFromServer, 30000); // 每30秒同步一次
       return () => clearInterval(interval);
     }
   }, [isLoggedIn, username]);

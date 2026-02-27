@@ -36,6 +36,8 @@ const offlineMessages = new Map();
 const groups = new Map();
 const tweets = [];
 const friendRequests = new Map();
+const friends = new Map();
+const messages = new Map();
 const users = new Set();
 
 console.log('服务器初始化中...');
@@ -155,6 +157,8 @@ app.post('/api/send-message', async (req, res) => {
 
     const message = {
       id: Date.now().toString(),
+      from: from,
+      to: to,
       from_user: from,
       to_user: to,
       content,
@@ -167,7 +171,15 @@ app.post('/api/send-message', async (req, res) => {
       try {
         const { data: savedMessage, error: dbError } = await supabase
           .from('messages')
-          .insert(message)
+          .insert({
+            id: message.id,
+            from_user: message.from_user,
+            to_user: message.to_user,
+            content: message.content,
+            type: message.type,
+            timestamp: message.timestamp,
+            read: message.read
+          })
           .select()
           .single();
 
@@ -177,6 +189,11 @@ app.post('/api/send-message', async (req, res) => {
       } catch (dbError) {
         console.warn('数据库错误:', dbError.message);
       }
+    } else {
+      // 使用内存存储消息
+      const recipientMessages = messages.get(to) || [];
+      recipientMessages.push(message);
+      messages.set(to, recipientMessages);
     }
 
     const recipient = onlineUsers.get(to);
@@ -200,13 +217,54 @@ app.get('/api/subscribe-messages/:username', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  const interval = setInterval(() => {
+  let lastFriendRequestCount = 0;
+  let lastMessageCount = 0;
+
+  const checkForUpdates = async () => {
     try {
+      let newFriendRequests = [];
+      let newMessages = [];
+
+      if (supabase) {
+        const { data: frData } = await supabase
+          .from('friend_requests')
+          .select('id')
+          .eq('to', username)
+          .eq('status', 'pending');
+        newFriendRequests = frData || [];
+      } else {
+        newFriendRequests = friendRequests.get(username) || [];
+      }
+
+      if (supabase) {
+        const { data: msgData } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('to_user', username);
+        newMessages = msgData || [];
+      } else {
+        newMessages = messages.get(username) || [];
+      }
+
+      if (newFriendRequests.length > lastFriendRequestCount) {
+        const diff = newFriendRequests.length - lastFriendRequestCount;
+        res.write(`data: {"type": "friend_request", "count": ${diff}}\n\n`);
+        lastFriendRequestCount = newFriendRequests.length;
+      }
+
+      if (newMessages.length > lastMessageCount) {
+        const diff = newMessages.length - lastMessageCount;
+        res.write(`data: {"type": "new_message", "count": ${diff}}\n\n`);
+        lastMessageCount = newMessages.length;
+      }
+
       res.write('data: {"type": "ping"}\n\n');
     } catch (error) {
-      clearInterval(interval);
+      console.error('检查更新错误:', error);
     }
-  }, 30000);
+  };
+
+  const interval = setInterval(checkForUpdates, 5000);
 
   req.on('close', () => {
     clearInterval(interval);
@@ -217,33 +275,44 @@ app.get('/api/offline-messages/:username', async (req, res) => {
   const { username } = req.params;
   
   try {
-    if (!supabase) {
-      return res.json({ 
-        success: true, 
-        messages: [],
-        count: 0
-      });
-    }
+    let messagesList = [];
     
-    const { data: messages, error } = await supabase
-      .from('messages')
-      .select('*')
-      .or(`and(from_user.eq.${username},to_user.eq.${username})`)
-      .order('timestamp', { ascending: true });
+    if (supabase) {
+      const { data: dbMessages, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(from_user.eq.${username},to_user.eq.${username})`)
+        .order('timestamp', { ascending: true });
 
-    if (error) {
-      console.warn('获取离线消息失败:', error.message);
-      return res.json({ 
-        success: true, 
-        messages: [],
-        count: 0
-      });
+      if (error) {
+        console.warn('获取离线消息失败:', error.message);
+      } else {
+        messagesList = (dbMessages || []).map(m => ({
+          ...m,
+          from: m.from_user,
+          to: m.to_user
+        }));
+      }
+    } else {
+      // 从内存中获取消息
+      const userMessages = [];
+      
+      // 查找发送给该用户的消息和该用户发送的消息
+      for (const [recipient, msgs] of messages.entries()) {
+        msgs.forEach(msg => {
+          if (msg.to === username || msg.from === username) {
+            userMessages.push(msg);
+          }
+        });
+      }
+      
+      messagesList = userMessages.sort((a, b) => a.timestamp - b.timestamp);
     }
     
     res.json({ 
       success: true, 
-      messages,
-      count: messages.length
+      messages: messagesList,
+      count: messagesList.length
     });
   } catch (error) {
     console.error('获取离线消息错误:', error);
@@ -419,6 +488,27 @@ app.post('/api/respond-friend-request', async (req, res) => {
         } catch (dbError) {
           console.warn('创建好友关系失败:', dbError.message);
         }
+      } else {
+        // 使用内存存储好友关系
+        const user1Friends = friends.get(request.from) || [];
+        const user2Friends = friends.get(request.to) || [];
+        
+        user1Friends.push({
+          user1: request.from,
+          user2: request.to,
+          status: 'active',
+          createdAt: Date.now()
+        });
+        
+        user2Friends.push({
+          user1: request.to,
+          user2: request.from,
+          status: 'active',
+          createdAt: Date.now()
+        });
+        
+        friends.set(request.from, user1Friends);
+        friends.set(request.to, user2Friends);
       }
     }
 
@@ -463,6 +553,48 @@ app.post('/api/cancel-friend-request', async (req, res) => {
     });
   } catch (error) {
     console.error('取消好友申请错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/friends/:username', async (req, res) => {
+  const { username } = req.params;
+  
+  try {
+    let friendsList = [];
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('friends')
+        .select('*')
+        .eq('user1', username)
+        .eq('status', 'active');
+
+      if (error) {
+        console.warn('获取好友列表失败:', error.message);
+      } else {
+        friendsList = data.map(f => ({
+          username: f.user2,
+          addedAt: f.createdAt
+        }));
+      }
+    } else {
+      // 从内存中获取
+      const userFriends = friends.get(username) || [];
+      friendsList = userFriends
+        .filter(f => f.status === 'active')
+        .map(f => ({
+          username: f.user2,
+          addedAt: f.createdAt
+        }));
+    }
+
+    res.json({ 
+      success: true, 
+      friends: friendsList
+    });
+  } catch (error) {
+    console.error('获取好友列表错误:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -716,7 +848,8 @@ app.post('/api/profile', async (req, res) => {
         profile: user 
       });
     } else {
-      // 如果没有 Supabase，仍然返回成功
+      // 如果没有 Supabase，添加到内存用户列表
+      users.add(username);
       res.json({ 
         success: true, 
         cid,
