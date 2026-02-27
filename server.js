@@ -764,6 +764,29 @@ app.post('/api/tweet', async (req, res) => {
       }
     }
 
+    if (supabase) {
+      try {
+        const { data: savedTweet, error: dbError } = await supabase
+          .from('tweets')
+          .insert({
+            id: tweet.id,
+            content: tweet.content,
+            author: tweet.author,
+            username: tweet.username,
+            timestamp: tweet.timestamp,
+            cid: cid
+          })
+          .select()
+          .single();
+
+        if (dbError) {
+          console.warn('数据库存储推文失败:', dbError.message);
+        }
+      } catch (dbError) {
+        console.warn('数据库错误:', dbError.message);
+      }
+    }
+
     tweets.unshift(tweet);
 
     res.json({ 
@@ -777,8 +800,33 @@ app.post('/api/tweet', async (req, res) => {
   }
 });
 
-app.get('/api/tweets', (req, res) => {
-  res.json({ tweets });
+app.get('/api/tweets', async (req, res) => {
+  try {
+    let tweetsList = [];
+
+    if (supabase) {
+      const { data: dbTweets, error } = await supabase
+        .from('tweets')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(100);
+
+      if (error) {
+        console.warn('获取推文失败:', error.message);
+      } else {
+        tweetsList = dbTweets || [];
+      }
+    }
+
+    if (tweetsList.length === 0) {
+      tweetsList = tweets;
+    }
+
+    res.json({ tweets: tweetsList });
+  } catch (error) {
+    console.error('获取推文错误:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.post('/api/profile', async (req, res) => {
