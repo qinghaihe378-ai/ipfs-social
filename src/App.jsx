@@ -134,7 +134,13 @@ function App() {
       eventSource.close();
     };
 
-    return () => eventSource.close();
+    return () => {
+      try {
+        eventSource.close();
+      } catch (e) {
+        console.error('关闭 EventSource 失败:', e);
+      }
+    };
   };
 
   const checkConnection = async () => {
@@ -288,7 +294,13 @@ function App() {
       eventSource.close();
     };
 
-    return () => eventSource.close();
+    return () => {
+      try {
+        eventSource.close();
+      } catch (e) {
+        console.error('关闭 EventSource 失败:', e);
+      }
+    };
   };
 
   const postTweet = async () => {
