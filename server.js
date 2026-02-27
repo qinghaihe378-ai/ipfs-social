@@ -230,7 +230,7 @@ app.get('/api/subscribe-messages/:username', async (req, res) => {
         const { data: frData } = await supabase
           .from('friend_requests')
           .select('id')
-          .eq('to', username)
+          .eq('to_user', username)
           .eq('status', 'pending');
         newFriendRequests = frData || [];
       } else {
