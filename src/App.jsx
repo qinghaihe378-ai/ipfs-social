@@ -116,44 +116,61 @@ function App() {
   };
 
   const subscribeToMessages = () => {
-    const eventSource = new EventSource(`${API_BASE}/api/subscribe-messages/${username}`);
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    let eventSource = null;
     
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'friend_request') {
-          console.log('收到新的好友申请通知');
-          loadFriendRequests();
-        } else if (data.type === 'new_message') {
-          console.log('收到新消息通知');
-          loadOfflineMessages();
-        } else if (data.type === 'ping') {
-          // 忽略心跳
-        } else {
-          setMessages(prev => {
-            const exists = prev.some(m => m.id === data.id);
-            if (!exists) {
-              const updated = [...prev, data];
-              localStorage.setItem('messages', JSON.stringify(updated));
-              return updated;
-            }
-            return prev;
-          });
+    const connect = () => {
+      eventSource = new EventSource(`${API_BASE}/api/subscribe-messages/${username}`);
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'friend_request') {
+            console.log('收到新的好友申请通知');
+            loadFriendRequests();
+          } else if (data.type === 'new_message') {
+            console.log('收到新消息通知');
+            loadOfflineMessages();
+          } else if (data.type === 'ping') {
+            reconnectAttempts = 0;
+          } else {
+            setMessages(prev => {
+              const exists = prev.some(m => m.id === data.id);
+              if (!exists) {
+                const updated = [...prev, data];
+                localStorage.setItem('messages', JSON.stringify(updated));
+                return updated;
+              }
+              return prev;
+            });
+          }
+        } catch (error) {
+          console.error('解析消息失败:', error);
         }
-      } catch (error) {
-        console.error('解析消息失败:', error);
-      }
-    };
+      };
 
-    eventSource.onerror = (error) => {
-      console.error('消息订阅错误:', error);
-      eventSource.close();
+      eventSource.onerror = (error) => {
+        console.error('消息订阅错误:', error);
+        eventSource.close();
+        
+        if (reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++;
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+          console.log(`${delay/1000}秒后尝试重连... (${reconnectAttempts}/${maxReconnectAttempts})`);
+          setTimeout(connect, delay);
+        }
+      };
     };
+    
+    connect();
 
     return () => {
       try {
-        eventSource.close();
+        if (eventSource) {
+          eventSource.close();
+        }
       } catch (e) {
         console.error('关闭 EventSource 失败:', e);
       }
@@ -515,8 +532,8 @@ function App() {
     if (isLoggedIn && username) {
       const interval = setInterval(async () => {
         await checkForNewFriendRequests();
-        await loadGroups(); // 同时检查群组更新
-      }, 30000); // 每30秒检查一次
+        await loadGroups();
+      }, 3000);
       return () => clearInterval(interval);
     }
   }, [isLoggedIn, username]);
@@ -524,7 +541,7 @@ function App() {
   // 定期同步好友列表
   useEffect(() => {
     if (isLoggedIn && username) {
-      const interval = setInterval(syncFriendsFromServer, 30000); // 每30秒同步一次
+      const interval = setInterval(syncFriendsFromServer, 3000);
       return () => clearInterval(interval);
     }
   }, [isLoggedIn, username]);
