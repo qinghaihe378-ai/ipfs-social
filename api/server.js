@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import { create } from 'ipfs-http-client';
 import { createClient } from '@supabase/supabase-js';
 
 const app = express();
@@ -14,33 +13,14 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-let ipfs;
 const onlineUsers = new Map();
 const offlineMessages = new Map();
 const groups = new Map();
 
-async function initIPFS() {
-  try {
-    ipfs = await create({ 
-      url: process.env.IPFS_URL || 'http://localhost:5001/api/v0',
-      timeout: 10000
-    });
-    console.log('IPFS 节点已连接');
-    
-    try {
-      const id = await ipfs.id();
-      console.log('节点 ID:', id.id);
-    } catch (idError) {
-      console.warn('无法获取节点 ID，但连接已建立:', idError.message);
-    }
-  } catch (error) {
-    console.warn('连接 IPFS 失败 (非关键):', error.message);
-    ipfs = null;
-  }
-}
+console.log('API服务器初始化中...');
+console.log('Supabase连接状态:', supabase ? '已配置' : '未配置');
+console.log('IPFS功能: 在Serverless环境中暂时禁用');
 
-// 启动 IPFS 初始化（非阻塞）
-initIPFS().catch(console.error);
 
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -188,20 +168,7 @@ app.post('/api/profile', async (req, res) => {
       throw createError;
     }
 
-    let cid = null;
-    if (ipfs) {
-      try {
-        const userData = JSON.stringify(user);
-        const result = await ipfs.add(userData);
-        cid = result.cid.toString();
-        console.log('用户资料已上传到 IPFS:', cid);
-      } catch (ipfsError) {
-        console.warn('IPFS 上传失败:', ipfsError.message);
-        cid = `ipfs-user-${username}-${Date.now()}`;
-      }
-    } else {
-      cid = `ipfs-user-${username}-${Date.now()}`;
-    }
+    const cid = `ipfs-user-${username}-${Date.now()}`;
 
     res.json({ 
       success: true, 
@@ -257,15 +224,7 @@ app.post('/api/tweet', async (req, res) => {
       id: Date.now().toString()
     };
 
-    if (ipfs) {
-      try {
-        const tweetJSON = JSON.stringify(tweet);
-        const result = await ipfs.add(tweetJSON);
-        console.log('推文已上传到 IPFS:', result.cid.toString());
-      } catch (ipfsError) {
-        console.warn('IPFS 上传失败:', ipfsError.message);
-      }
-    }
+
 
     res.json({ 
       success: true, 
@@ -308,15 +267,7 @@ app.post('/api/send-message', async (req, res) => {
       console.log('用户离线，存储离线消息:', message);
     }
 
-    if (ipfs) {
-      try {
-        const messageJSON = JSON.stringify(message);
-        const result = await ipfs.add(messageJSON);
-        console.log('消息已上传到 IPFS:', result.cid.toString());
-      } catch (ipfsError) {
-        console.warn('IPFS 上传失败:', ipfsError.message);
-      }
-    }
+
 
     res.json({ 
       success: true, 
